@@ -8,6 +8,7 @@ const TABLE_IDS = {
   boutiques:       'mznghgj1ksmg1g8',
   tutoriels:       'mdb6d04p0cbqv3f',
   evenements:      'm72t0konedv041r',
+  groupes:         'myq4pxo3t8o9ax6',
 };
 
 // ── Client interne ────────────────────────────────────────────────────────────
@@ -133,6 +134,19 @@ export async function getEvenements() {
 /** Un événement par son ID */
 export async function getEvenementById(id) {
   return fetchRowById(TABLE_IDS.evenements, id);
+}
+
+/** Tous les groupes approuvés */
+export async function getGroupes() {
+  return fetchAllRows(TABLE_IDS.groupes, {
+    where: '(statut,eq,approuve)',
+    sort:  'nom',
+  });
+}
+
+/** Un groupe par son ID */
+export async function getGroupeById(id) {
+  return fetchRowById(TABLE_IDS.groupes, id);
 }
 
 /** Une boutique par son ID */

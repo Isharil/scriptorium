@@ -1,0 +1,186 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getGroupes, getGroupeById } from '../../lib/nocodb.js';
+
+export async function getStaticPaths() {
+  try {
+    const groupes = await getGroupes();
+    return groupes.map(g => ({ params: { id: String(g.Id) } }));
+  } catch { return []; }
+}
+
+const { id } = Astro.params;
+const g = await getGroupeById(id).catch(() => null);
+if (!g) return Astro.redirect('/groupes');
+
+const TYPES = {
+  troupe_reconstitution: 'Troupe de reconstitution',
+  musique:               'Groupe de musique',
+  theatre_spectacle:     'Théâtre / Spectacle',
+  confrerie:             'Confrérie',
+  association:           'Association',
+};
+
+const PERIODES = {
+  tout_MA:    'Tout le Moyen Âge',
+  haut_MA:    'Haut Moyen Âge',
+  Xe_XIe:     'Xe – XIe s.',
+  XIIe_XIIIe: 'XIIe – XIIIe s.',
+  XIVe:       'XIVe s.',
+  XVe:        'XVe s.',
+};
+
+const REGIONS = {
+  france:      'France',
+  empire:      'Empire germanique',
+  italie:      'Italie',
+  iberique:    'Péninsule ibérique',
+  angleterre:  'Îles britanniques',
+  scandinavie: 'Scandinavie',
+  byzance:     'Byzance',
+};
+
+function parseMulti(val, map) {
+  if (!val) return [];
+  return String(val).split(',').map(v => map[v.trim()] ?? v.trim()).filter(Boolean);
+}
+
+const periodes = parseMulti(g.periodes, PERIODES);
+const regions  = parseMulti(g.regions,  REGIONS);
+
+const reseaux = [
+  { label: 'Site web',   url: g.url_site,      icon: '🌐' },
+  { label: 'Facebook',   url: g.url_facebook,  icon: '📘' },
+  { label: 'Instagram',  url: g.url_instagram, icon: '📷' },
+  { label: 'YouTube',    url: g.url_youtube,   icon: '▶'  },
+].filter(r => r.url);
+---
+
+<Layout title={g.nom} description={`${TYPES[g.type] ?? 'Groupe médiéval'} — ${g.description?.slice(0, 120) ?? ''}`}>
+
+  <nav class="breadcrumb" aria-label="Fil d'Ariane">
+    <ol>
+      <li><a href="/">Accueil</a></li><li aria-hidden="true">›</li>
+      <li><a href="/groupes">Groupes</a></li><li aria-hidden="true">›</li>
+      <li aria-current="page">{g.nom}</li>
+    </ol>
+  </nav>
+
+  <div class="detail-page">
+    <main class="detail-main">
+
+      <header class="detail-header">
+        <div class="detail-badges">
+          {g.type && <span class="badge-type">{TYPES[g.type] ?? g.type}</span>}
+        </div>
+        <h1 class="detail-titre">{g.nom}</h1>
+        {g.ville && (
+          <p class="detail-lieu">{[g.ville, g.pays].filter(Boolean).join(', ')}</p>
+        )}
+      </header>
+
+      {g.description && (
+        <section class="detail-section">
+          <h2 class="section-title">Présentation</h2>
+          <p class="detail-desc">{g.description}</p>
+        </section>
+      )}
+
+      {g.specialites && (
+        <section class="detail-section">
+          <h2 class="section-title">Spécialités</h2>
+          <p class="detail-desc">{g.specialites}</p>
+        </section>
+      )}
+
+      {reseaux.length > 0 && (
+        <section class="detail-section">
+          <h2 class="section-title">Liens</h2>
+          <div class="reseaux">
+            {reseaux.map(r => (
+              <a href={r.url} target="_blank" rel="noopener noreferrer" class="reseau-btn">
+                <span>{r.icon}</span> {r.label} ↗
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+
+    </main>
+
+    <!-- Sidebar -->
+    <aside class="detail-sidebar">
+      <div class="widget">
+        <div class="widget-title">Informations</div>
+        <dl class="meta-dl">
+          {g.type && (<><dt>Type</dt><dd>{TYPES[g.type] ?? g.type}</dd></>)}
+          {g.ville && (<><dt>Ville</dt><dd>{g.ville}</dd></>)}
+          {g.pays  && (<><dt>Pays</dt><dd>{g.pays}</dd></>)}
+          {periodes.length > 0 && (
+            <><dt>Période{periodes.length > 1 ? 's' : ''}</dt>
+            <dd class="dd-tags">{periodes.map(p => <span class="m-tag">{p}</span>)}</dd></>
+          )}
+          {regions.length > 0 && (
+            <><dt>Région{regions.length > 1 ? 's' : ''}</dt>
+            <dd class="dd-tags">{regions.map(r => <span class="m-tag">{r}</span>)}</dd></>
+          )}
+          {g.contact && (<><dt>Contact</dt><dd>{g.contact}</dd></>)}
+        </dl>
+      </div>
+
+      {reseaux.length > 0 && (
+        <div class="widget widget-actions">
+          {reseaux.map(r => (
+            <a href={r.url} target="_blank" rel="noopener noreferrer" class="action-btn">
+              {r.icon} {r.label} ↗
+            </a>
+          ))}
+        </div>
+      )}
+
+      <a href="/groupes" class="back-link">← Retour aux groupes</a>
+    </aside>
+  </div>
+</Layout>
+
+<style>
+  .breadcrumb { background: #faf8f4; border-bottom: 0.5px solid #d4c9b0; padding: .6rem 1.5rem; }
+  .breadcrumb ol { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; gap: .5rem; list-style: none; padding: 0; flex-wrap: wrap; }
+  .breadcrumb a { font-size: .78rem; color: #8b6914; text-decoration: none; }
+  .breadcrumb [aria-hidden] { color: #ccc; }
+  .breadcrumb [aria-current] { font-size: .78rem; color: #5a5a5a; }
+
+  .detail-page { max-width: 1200px; margin: 0 auto; padding: 2.5rem 1.5rem; display: grid; grid-template-columns: 1fr 280px; gap: 3rem; align-items: start; }
+
+  .detail-header { margin-bottom: 2rem; padding-bottom: 2rem; border-bottom: 0.5px solid #eee8d8; }
+  .detail-badges { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+  .badge-type { font-size: .72rem; background: #f0eaff; color: #3a1a6a; border: 0.5px solid #c9b8e8; border-radius: 3px; padding: .2rem .6rem; }
+  .detail-titre { margin: 0 0 .5rem; font-size: clamp(1.5rem, 3vw, 2rem); font-family: 'Georgia', serif; color: #1a1a1a; }
+  .detail-lieu { margin: 0; font-size: .9rem; color: #6a6a6a; font-style: italic; }
+
+  .detail-section { margin-bottom: 2rem; padding-bottom: 2rem; border-bottom: 0.5px solid #eee8d8; }
+  .detail-section:last-child { border-bottom: none; }
+  .section-title { margin: 0 0 .85rem; font-size: .72rem; font-family: sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #7a7a7a; }
+  .detail-desc { margin: 0; font-size: .92rem; line-height: 1.7; color: #3a3a3a; }
+
+  .reseaux { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .reseau-btn { display: inline-flex; align-items: center; gap: .4rem; padding: .5rem 1rem; font-size: .82rem; font-family: inherit; text-decoration: none; border: 0.5px solid #d4c9b0; border-radius: 4px; background: #fff; color: #1a1a1a; transition: border-color .15s; }
+  .reseau-btn:hover { border-color: #8b6914; color: #8b6914; }
+
+  .detail-sidebar { position: sticky; top: 72px; display: flex; flex-direction: column; gap: 1.25rem; }
+  .widget { border: 0.5px solid #d4c9b0; border-radius: 6px; padding: 1.1rem 1.25rem; background: #fff; }
+  .widget-title { font-size: .68rem; font-family: sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #9a9a9a; margin-bottom: .85rem; padding-bottom: .6rem; border-bottom: 0.5px solid #eee8d8; }
+  .meta-dl { display: grid; grid-template-columns: auto 1fr; column-gap: .75rem; row-gap: .5rem; margin: 0; font-size: .82rem; }
+  .meta-dl dt { color: #7a7a7a; white-space: nowrap; }
+  .meta-dl dd { margin: 0; color: #1a1a1a; }
+  .dd-tags { display: flex; flex-wrap: wrap; gap: .3rem; }
+  .m-tag { font-size: .7rem; background: #f5f0e8; color: #5a4a1a; border: 0.5px solid #d4c9b0; border-radius: 3px; padding: .1rem .35rem; }
+  .widget-actions { background: #faf8f4; display: flex; flex-direction: column; gap: .5rem; }
+  .action-btn { display: flex; align-items: center; justify-content: center; gap: .4rem; padding: .55rem 1rem; font-size: .82rem; font-family: inherit; text-decoration: none; border-radius: 4px; background: #fff; color: #1a1a1a; border: 0.5px solid #d4c9b0; transition: border-color .15s; }
+  .action-btn:hover { border-color: #8b6914; color: #8b6914; }
+  .back-link { font-size: .8rem; color: #8b6914; text-decoration: none; }
+  .back-link:hover { text-decoration: underline; }
+
+  @media (max-width: 900px) { .detail-page { grid-template-columns: 1fr; } .detail-sidebar { position: static; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); } .back-link { grid-column: 1 / -1; } }
+  @media (max-width: 600px) { .detail-page { padding: 1.25rem 1rem; } .meta-dl { grid-template-columns: 1fr; } }
+</style>
