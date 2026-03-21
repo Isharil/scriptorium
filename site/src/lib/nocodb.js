@@ -149,6 +149,15 @@ export async function getTroupeById(id) {
   return fetchRowById(TABLE_IDS.troupes, id);
 }
 
+/** Toutes les troupes avec coordonnées (pour la carte) */
+export async function getTroupesAvecCoords() {
+  return fetchAllRows(TABLE_IDS.troupes, {
+    where: '(statut,eq,approuve)',
+    sort:  'nom',
+    limit: '500',
+  });
+}
+
 /** Une boutique par son ID */
 export async function getBoutiqueById(id) {
   return fetchRowById(TABLE_IDS.boutiques, id);

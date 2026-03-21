@@ -1,18 +1,20 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { getBoutiquesAvecCoords, getEvenementsAvecCoords } from '../lib/nocodb.js';
+import { getBoutiquesAvecCoords, getEvenementsAvecCoords, getTroupesAvecCoords } from '../lib/nocodb.js';
 
-let boutiques = [], evenements = [];
+let boutiques = [], evenements = [], troupes = [];
 try {
-  [boutiques, evenements] = await Promise.all([
+  [boutiques, evenements, troupes] = await Promise.all([
     getBoutiquesAvecCoords(),
     getEvenementsAvecCoords(),
+    getTroupesAvecCoords(),
   ]);
 } catch (e) { console.warn('[carte]', e.message); }
 
 // Filtrer uniquement ceux avec des coordonnées
-const boutiquesGeo = boutiques.filter(b => b.latitude && b.longitude);
+const boutiquesGeo  = boutiques.filter(b => b.latitude && b.longitude);
 const evenementsGeo = evenements.filter(e => e.latitude && e.longitude);
+const troupesGeo    = troupes.filter(t => t.latitude && t.longitude);
 
 const vue = Astro.url.searchParams.get('vue') ?? 'tout';
 
@@ -40,6 +42,15 @@ const markersData = {
     date_debut: e.date_debut ?? '',
     url:        `/evenements/${e.Id}`,
   })),
+  troupes: troupesGeo.map(t => ({
+    id:   t.Id,
+    lat:  Number(t.latitude),
+    lng:  Number(t.longitude),
+    nom:  t.nom,
+    type: t.type ?? '',
+    ville: t.ville ?? '',
+    url:  `/troupes/${t.Id}`,
+  })),
 };
 
 const TYPE_LABELS = {
@@ -60,20 +71,22 @@ const EVT_TYPE_LABELS = {
       <div class="controls-inner">
 
         <div class="layer-toggle">
-          <a href="/carte?vue=tout"      class:list={['layer-btn', { active: vue !== 'evenements' && vue !== 'boutiques' }]}>Tout</a>
-          <a href="/carte?vue=boutiques" class:list={['layer-btn', { active: vue === 'boutiques' }]}>
-            <span class="dot dot-boutique"></span>
-            Boutiques ({boutiquesGeo.length})
+          <a href="/carte?vue=tout"       class:list={['layer-btn', { active: !['boutiques','evenements','troupes'].includes(vue) }]}>Tout</a>
+          <a href="/carte?vue=boutiques"  class:list={['layer-btn', { active: vue === 'boutiques' }]}>
+            <span class="dot dot-boutique"></span>Boutiques ({boutiquesGeo.length})
           </a>
           <a href="/carte?vue=evenements" class:list={['layer-btn', { active: vue === 'evenements' }]}>
-            <span class="dot dot-event"></span>
-            Événements ({evenementsGeo.length})
+            <span class="dot dot-event"></span>Événements ({evenementsGeo.length})
+          </a>
+          <a href="/carte?vue=troupes"    class:list={['layer-btn', { active: vue === 'troupes' }]}>
+            <span class="dot dot-troupe"></span>Troupes ({troupesGeo.length})
           </a>
         </div>
 
         <div class="carte-legend">
           <span class="legend-item"><span class="dot dot-boutique"></span>Boutique</span>
           <span class="legend-item"><span class="dot dot-event"></span>Événement</span>
+          <span class="legend-item"><span class="dot dot-troupe"></span>Troupe</span>
         </div>
       </div>
     </div>
@@ -83,11 +96,11 @@ const EVT_TYPE_LABELS = {
 
     <!-- Stats bas -->
     <div class="carte-footer">
-      <span>{boutiquesGeo.length} boutique{boutiquesGeo.length !== 1 ? 's' : ''} géolocalisée{boutiquesGeo.length !== 1 ? 's' : ''}</span>
+      <span>{boutiquesGeo.length} boutique{boutiquesGeo.length !== 1 ? 's' : ''}</span>
       <span class="sep">·</span>
-      <span>{evenementsGeo.length} événement{evenementsGeo.length !== 1 ? 's' : ''} géolocalisé{evenementsGeo.length !== 1 ? 's' : ''}</span>
+      <span>{evenementsGeo.length} événement{evenementsGeo.length !== 1 ? 's' : ''}</span>
       <span class="sep">·</span>
-      <a href="/boutiques">Voir toutes les boutiques →</a>
+      <span>{troupesGeo.length} troupe{troupesGeo.length !== 1 ? 's' : ''}</span>
     </div>
   </div>
 
@@ -99,6 +112,8 @@ const EVT_TYPE_LABELS = {
     const iconBoutique = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#8b6914" width="28" height="28"><path d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>`;
 
     const iconEvent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#2a4a8b" width="28" height="28"><path fill-rule="evenodd" d="M6.75 2.25A.75.75 0 017.5 3v1.5h9V3A.75.75 0 0118 3v1.5h.75a3 3 0 013 3v11.25a3 3 0 01-3 3H5.25a3 3 0 01-3-3V7.5a3 3 0 013-3H6V3a.75.75 0 01.75-.75zm13.5 9a1.5 1.5 0 00-1.5-1.5H5.25a1.5 1.5 0 00-1.5 1.5v7.5a1.5 1.5 0 001.5 1.5h13.5a1.5 1.5 0 001.5-1.5v-7.5z" clip-rule="evenodd"/></svg>`;
+
+    const iconTroupe = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#6b2a8b" width="28" height="28"><path fill-rule="evenodd" d="M8.25 6.75a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM15.75 9.75a3 3 0 116 0 3 3 0 01-6 0zM2.25 9.75a3 3 0 116 0 3 3 0 01-6 0zM6.31 15.117A6.745 6.745 0 0112 12a6.745 6.745 0 016.709 7.498.75.75 0 01-.372.568A12.696 12.696 0 0112 21.75c-2.305 0-4.47-.612-6.337-1.684a.75.75 0 01-.372-.568 6.787 6.787 0 011.019-4.38z" clip-rule="evenodd"/><path d="M5.082 14.254a8.287 8.287 0 00-1.308 5.135 9.687 9.687 0 01-1.764-.44l-.115-.04a.563.563 0 01-.373-.487l-.01-.121a3.75 3.75 0 013.57-4.047zM20.226 19.389a8.287 8.287 0 00-1.308-5.135 3.75 3.75 0 013.57 4.047l-.01.121a.563.563 0 01-.373.486l-.115.04c-.567.2-1.156.349-1.764.441z"/></svg>`;
 
     function makeIcon(svg, cls) {
       return L.divIcon({
@@ -138,7 +153,7 @@ const EVT_TYPE_LABELS = {
 
       // ── Boutiques ─────────────────────────────────────────────────────────
       const layerBoutiques = L.layerGroup();
-      if (vue !== 'evenements') {
+      if (vue !== 'evenements' && vue !== 'troupes') {
         markersData.boutiques.forEach(b => {
           const popup = `
             <div class="popup">
@@ -160,7 +175,7 @@ const EVT_TYPE_LABELS = {
 
       // ── Événements ────────────────────────────────────────────────────────
       const layerEvents = L.layerGroup();
-      if (vue !== 'boutiques') {
+      if (vue !== 'boutiques' && vue !== 'troupes') {
         markersData.evenements.forEach(e => {
           const popup = `
             <div class="popup">
@@ -179,10 +194,31 @@ const EVT_TYPE_LABELS = {
         layerEvents.addTo(map);
       }
 
+      // ── Troupes ───────────────────────────────────────────────────────────
+      const layerTroupes = L.layerGroup();
+      if (vue !== 'boutiques' && vue !== 'evenements') {
+        markersData.troupes.forEach(t => {
+          const popup = `
+            <div class="popup">
+              <div class="popup-type">Troupe</div>
+              <strong class="popup-nom">${t.nom}</strong>
+              ${t.ville ? `<div class="popup-lieu">${t.ville}</div>` : ''}
+              <div class="popup-actions">
+                <a href="${t.url}" class="popup-link">Fiche</a>
+              </div>
+            </div>`;
+          L.marker([t.lat, t.lng], { icon: makeIcon(iconTroupe, 'marker-troupe') })
+            .bindPopup(popup)
+            .addTo(layerTroupes);
+        });
+        layerTroupes.addTo(map);
+      }
+
       // Ajuster la vue aux marqueurs si on a des données
       const allMarkers = [
-        ...(vue !== 'evenements' ? markersData.boutiques  : []),
-        ...(vue !== 'boutiques'  ? markersData.evenements : []),
+        ...(vue !== 'evenements' && vue !== 'troupes'   ? markersData.boutiques  : []),
+        ...(vue !== 'boutiques'  && vue !== 'troupes'   ? markersData.evenements : []),
+        ...(vue !== 'boutiques'  && vue !== 'evenements' ? markersData.troupes   : []),
       ];
       if (allMarkers.length > 0) {
         const bounds = L.latLngBounds(allMarkers.map(m => [m.lat, m.lng]));
@@ -206,6 +242,7 @@ const EVT_TYPE_LABELS = {
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .dot-boutique { background: #8b6914; }
   .dot-event    { background: #2a4a8b; }
+  .dot-troupe   { background: #6b2a8b; }
   .carte-legend { display: flex; gap: 1rem; }
   .legend-item { display: flex; align-items: center; gap: .4rem; font-size: .78rem; color: #5a5a5a; }
 
