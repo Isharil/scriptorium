@@ -71,6 +71,11 @@ const youtubeId = t.type_media === 'video' ? getYoutubeId(t.url) : null;
 
       <header class="detail-header">
         <div class="detail-badges">
+          {t.type_contenu && (
+            <span class:list={['badge-type', t.type_contenu === 'site_tutoriels' ? 'badge-type-site' : 'badge-type-tuto']}>
+              {t.type_contenu === 'site_tutoriels' ? 'Site de tutoriels' : 'Tutoriel'}
+            </span>
+          )}
           {t.type_media && <span class="badge-media">{MEDIA_LABELS[t.type_media] ?? t.type_media}</span>}
           {t.difficulte && (
             <span class={`badge-diff ${DIFF_CLS[t.difficulte] ?? ''}`}>{DIFF_LABELS[t.difficulte] ?? t.difficulte}</span>
@@ -118,6 +123,7 @@ const youtubeId = t.type_media === 'video' ? getYoutubeId(t.url) : null;
       <div class="widget">
         <div class="widget-title">Informations</div>
         <dl class="meta-dl">
+          {t.type_contenu && (<><dt>Type</dt><dd>{t.type_contenu === 'site_tutoriels' ? 'Site de tutoriels' : 'Tutoriel'}</dd></>)}
           {t.type_media && (<><dt>Format</dt><dd>{MEDIA_LABELS[t.type_media] ?? t.type_media}</dd></>)}
           {t.domaine && (<><dt>Domaine</dt><dd>{DOMAINE_LABELS[t.domaine] ?? t.domaine}</dd></>)}
           {t.difficulte && (<><dt>Difficulté</dt><dd><span class={`badge-diff ${DIFF_CLS[t.difficulte]}`}>{DIFF_LABELS[t.difficulte]}</span></dd></>)}
@@ -149,6 +155,9 @@ const youtubeId = t.type_media === 'video' ? getYoutubeId(t.url) : null;
 
   .detail-header { margin-bottom: 2rem; padding-bottom: 2rem; border-bottom: 0.5px solid #eee8d8; }
   .detail-badges { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+  .badge-type { font-size: .72rem; border-radius: 3px; padding: .2rem .6rem; border: 0.5px solid transparent; font-weight: 600; }
+  .badge-type-tuto { background: #e8f0e8; color: #1a4a1a; border-color: #b0d4b0; }
+  .badge-type-site { background: #e8eef5; color: #1a2a5a; border-color: #b0bdd4; }
   .badge-media { font-size: .72rem; background: #f5f0e8; color: #5a4a1a; border: 0.5px solid #d4c9b0; border-radius: 3px; padding: .2rem .6rem; }
   .badge-sources { font-size: .72rem; background: #f5f0e8; color: #5a4a1a; border: 0.5px solid #d4c9b0; border-radius: 3px; padding: .2rem .6rem; }
   .badge-diff { font-size: .72rem; border-radius: 3px; padding: .2rem .6rem; border: 0.5px solid transparent; }

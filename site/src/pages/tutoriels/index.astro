@@ -6,12 +6,13 @@ let tutoriels = [];
 try { tutoriels = await getTutoriels(); }
 catch (e) { console.warn('[tutoriels]', e.message); }
 
-const params   = Astro.url.searchParams;
-const qQ       = params.get('q')          ?? '';
-const qDomaine = params.get('domaine')    ?? '';
-const qDiff    = params.get('difficulte') ?? '';
-const qMedia   = params.get('media')      ?? '';
-const qSources = params.get('sources')    ?? '';
+const params      = Astro.url.searchParams;
+const qQ          = params.get('q')          ?? '';
+const qDomaine    = params.get('domaine')    ?? '';
+const qDiff       = params.get('difficulte') ?? '';
+const qMedia      = params.get('media')      ?? '';
+const qSources    = params.get('sources')    ?? '';
+const qTypeContenu = params.get('type')     ?? '';
 
 function matchMulti(field, value) {
   if (!value) return true;
@@ -20,10 +21,11 @@ function matchMulti(field, value) {
 }
 
 const filtres = tutoriels.filter(t => {
-  if (qDomaine && t.domaine !== qDomaine)                    return false;
-  if (qDiff    && t.difficulte !== qDiff)                    return false;
-  if (qMedia   && t.type_media !== qMedia)                   return false;
-  if (qSources && !t.sources_citees)                         return false;
+  if (qDomaine     && t.domaine      !== qDomaine)           return false;
+  if (qDiff        && t.difficulte   !== qDiff)              return false;
+  if (qMedia       && t.type_media   !== qMedia)             return false;
+  if (qTypeContenu && t.type_contenu !== qTypeContenu)       return false;
+  if (qSources     && !t.sources_citees)                     return false;
   if (qQ) {
     const hay = `${t.titre} ${t.domaine} ${t.difficulte}`.toLowerCase();
     if (!hay.includes(qQ.toLowerCase())) return false;
@@ -31,15 +33,16 @@ const filtres = tutoriels.filter(t => {
   return true;
 });
 
-const hasFilters = qQ || qDomaine || qDiff || qMedia || qSources;
+const hasFilters = qQ || qDomaine || qDiff || qMedia || qSources || qTypeContenu;
 
 function buildUrl(ov) {
   const p = new URLSearchParams({
-    ...(qQ       ? { q: qQ }               : {}),
-    ...(qDomaine ? { domaine: qDomaine }   : {}),
-    ...(qDiff    ? { difficulte: qDiff }   : {}),
-    ...(qMedia   ? { media: qMedia }       : {}),
-    ...(qSources ? { sources: qSources }   : {}),
+    ...(qQ           ? { q: qQ }               : {}),
+    ...(qDomaine     ? { domaine: qDomaine }   : {}),
+    ...(qDiff        ? { difficulte: qDiff }   : {}),
+    ...(qMedia       ? { media: qMedia }       : {}),
+    ...(qSources     ? { sources: qSources }   : {}),
+    ...(qTypeContenu ? { type: qTypeContenu }  : {}),
     ...ov,
   });
   for (const [k, v] of [...p.entries()]) { if (!v) p.delete(k); }
@@ -109,6 +112,15 @@ function fmt(d) {
         </div>
 
         <div class="filtre-group">
+          <label class="filtre-label">Type</label>
+          <div class="chip-group">
+            <a href={buildUrl({ type: '' })} class:list={['chip', { 'chip-active': !qTypeContenu }]}>Tous</a>
+            <a href={buildUrl({ type: 'tutoriel' })} class:list={['chip', { 'chip-active': qTypeContenu === 'tutoriel' }]}>Tutoriel</a>
+            <a href={buildUrl({ type: 'site_tutoriels' })} class:list={['chip', { 'chip-active': qTypeContenu === 'site_tutoriels' }]}>Site de tutoriels</a>
+          </div>
+        </div>
+
+        <div class="filtre-group">
           <label class="filtre-label">Domaine</label>
           <div class="chip-group">
             <a href={buildUrl({ domaine: '' })} class:list={['chip', { 'chip-active': !qDomaine }]}>Tous</a>
@@ -162,6 +174,11 @@ function fmt(d) {
           {filtres.map(t => (
             <li class="tutoriel-item">
               <div class="ti-meta">
+                {t.type_contenu && (
+                  <span class:list={['ti-type', t.type_contenu === 'site_tutoriels' ? 'ti-type-site' : 'ti-type-tuto']}>
+                    {t.type_contenu === 'site_tutoriels' ? 'Site de tutoriels' : 'Tutoriel'}
+                  </span>
+                )}
                 {t.type_media && <span class="ti-media">{mediaIcon(t.type_media)}</span>}
                 {t.difficulte && <span class={`ti-diff ${diffCls(t.difficulte)}`}>{diffLabel(t.difficulte)}</span>}
                 {t.sources_citees && <span class="ti-sources" title="Sources historiques citées">📜 Sourcé</span>}
@@ -221,6 +238,9 @@ function fmt(d) {
   .tutoriel-item:last-child { border-bottom: none; }
 
   .ti-meta { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; }
+  .ti-type { font-size: .72rem; font-family: sans-serif; border-radius: 3px; padding: .1rem .4rem; border: 0.5px solid transparent; font-weight: 600; }
+  .ti-type-tuto { background: #e8f0e8; color: #1a4a1a; border-color: #b0d4b0; }
+  .ti-type-site { background: #e8eef5; color: #1a2a5a; border-color: #b0bdd4; }
   .ti-media { font-size: .72rem; font-family: sans-serif; background: #f5f0e8; color: #5a4a1a; border: 0.5px solid #d4c9b0; border-radius: 3px; padding: .1rem .4rem; }
   .ti-diff { font-size: .72rem; font-family: sans-serif; border-radius: 3px; padding: .1rem .4rem; border: 0.5px solid transparent; }
   .diff-deb  { background: #e8f5e8; color: #1a4a2a; border-color: #b0d4b0; }

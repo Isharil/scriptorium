@@ -1,0 +1,182 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getEvenements, getEvenementById } from '../../lib/nocodb.js';
+
+export async function getStaticPaths() {
+  try {
+    const evenements = await getEvenements();
+    return evenements.map(e => ({ params: { id: String(e.Id) } }));
+  } catch { return []; }
+}
+
+const { id } = Astro.params;
+const e = await getEvenementById(id).catch(() => null);
+if (!e) return Astro.redirect('/evenements');
+
+const TYPES = {
+  marche:     'Marché / Fête',
+  festival:   'Festival',
+  tournoi:    'Tournoi',
+  stage:      'Stage / Atelier',
+  conference: 'Conférence',
+};
+
+function fmt(d, opts) {
+  if (!d) return null;
+  return new Date(d).toLocaleDateString('fr-FR', opts ?? { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function duree(debut, fin) {
+  if (!debut || !fin || debut === fin) return null;
+  const diff = Math.round((new Date(fin) - new Date(debut)) / (1000 * 60 * 60 * 24));
+  return diff > 0 ? `${diff + 1} jours` : null;
+}
+
+const today = new Date(); today.setHours(0,0,0,0);
+const dateFin = e.date_fin ? new Date(e.date_fin) : e.date_debut ? new Date(e.date_debut) : null;
+const passe = dateFin && dateFin < today;
+---
+
+<Layout title={e.nom} description={`${TYPES[e.type] ?? 'Événement'} médiéval — ${[e.ville, e.pays].filter(Boolean).join(', ')}`}>
+
+  <nav class="breadcrumb" aria-label="Fil d'Ariane">
+    <ol>
+      <li><a href="/">Accueil</a></li><li aria-hidden="true">›</li>
+      <li><a href="/evenements">Événements</a></li><li aria-hidden="true">›</li>
+      <li aria-current="page">{e.nom}</li>
+    </ol>
+  </nav>
+
+  <div class="detail-page">
+    <main class="detail-main">
+
+      <header class="detail-header">
+        <div class="detail-badges">
+          {e.type && <span class="badge-type">{TYPES[e.type] ?? e.type}</span>}
+          {passe && <span class="badge-passe">Événement passé</span>}
+        </div>
+
+        <h1 class="detail-titre">{e.nom}</h1>
+
+        <div class="detail-lieu">
+          {[e.adresse, e.ville, e.pays].filter(Boolean).join(', ')}
+        </div>
+      </header>
+
+      {e.description && (
+        <section class="detail-section">
+          <h2 class="section-title">Description</h2>
+          <p class="detail-desc">{e.description}</p>
+        </section>
+      )}
+
+      {e.url && (
+        <section class="detail-section">
+          <h2 class="section-title">Site officiel</h2>
+          <a href={e.url} target="_blank" rel="noopener noreferrer" class="source-btn">
+            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clip-rule="evenodd"/><path fill-rule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clip-rule="evenodd"/></svg>
+            Voir le site officiel ↗
+          </a>
+        </section>
+      )}
+
+    </main>
+
+    <!-- Sidebar -->
+    <aside class="detail-sidebar">
+
+      <!-- Dates -->
+      <div class="widget widget-dates">
+        <div class="widget-title">Dates</div>
+        <div class="dates-display">
+          <div class="date-bloc">
+            <span class="date-label">Début</span>
+            <span class="date-val">{fmt(e.date_debut) ?? '—'}</span>
+          </div>
+          {e.date_fin && e.date_fin !== e.date_debut && (
+            <div class="date-bloc">
+              <span class="date-label">Fin</span>
+              <span class="date-val">{fmt(e.date_fin)}</span>
+            </div>
+          )}
+          {duree(e.date_debut, e.date_fin) && (
+            <div class="date-duree">{duree(e.date_debut, e.date_fin)}</div>
+          )}
+        </div>
+      </div>
+
+      <!-- Infos -->
+      <div class="widget">
+        <div class="widget-title">Informations</div>
+        <dl class="meta-dl">
+          {e.type   && (<><dt>Type</dt><dd>{TYPES[e.type] ?? e.type}</dd></>)}
+          {e.ville  && (<><dt>Ville</dt><dd>{e.ville}</dd></>)}
+          {e.pays   && (<><dt>Pays</dt><dd>{e.pays}</dd></>)}
+          {e.organisateur && (<><dt>Organisateur</dt><dd>{e.organisateur}</dd></>)}
+          {e.acces_libre != null && (<><dt>Accès</dt><dd>{e.acces_libre ? 'Gratuit' : 'Payant'}</dd></>)}
+        </dl>
+      </div>
+
+      {e.url && (
+        <div class="widget widget-actions">
+          <a href={e.url} target="_blank" rel="noopener noreferrer" class="action-btn">
+            Site officiel ↗
+          </a>
+        </div>
+      )}
+
+      <a href="/evenements" class="back-link">← Retour aux événements</a>
+    </aside>
+  </div>
+</Layout>
+
+<style>
+  .breadcrumb { background: #faf8f4; border-bottom: 0.5px solid #d4c9b0; padding: .6rem 1.5rem; }
+  .breadcrumb ol { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; gap: .5rem; list-style: none; padding: 0; flex-wrap: wrap; }
+  .breadcrumb a { font-size: .78rem; color: #8b6914; text-decoration: none; }
+  .breadcrumb [aria-hidden] { color: #ccc; }
+  .breadcrumb [aria-current] { font-size: .78rem; color: #5a5a5a; }
+
+  .detail-page { max-width: 1200px; margin: 0 auto; padding: 2.5rem 1.5rem; display: grid; grid-template-columns: 1fr 280px; gap: 3rem; align-items: start; }
+
+  .detail-header { margin-bottom: 2rem; padding-bottom: 2rem; border-bottom: 0.5px solid #eee8d8; }
+  .detail-badges { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+  .badge-type { font-size: .72rem; background: #f0eaff; color: #3a1a6a; border: 0.5px solid #c9b8e8; border-radius: 3px; padding: .2rem .6rem; }
+  .badge-passe { font-size: .72rem; background: #f5f5f0; color: #7a7a7a; border: 0.5px solid #d0d0c8; border-radius: 3px; padding: .2rem .6rem; }
+  .detail-titre { margin: 0 0 .5rem; font-size: clamp(1.5rem, 3vw, 2rem); font-family: 'Georgia', serif; color: #1a1a1a; }
+  .detail-lieu { font-size: .9rem; color: #6a6a6a; font-style: italic; }
+
+  .detail-section { margin-bottom: 2rem; padding-bottom: 2rem; border-bottom: 0.5px solid #eee8d8; }
+  .detail-section:last-child { border-bottom: none; }
+  .section-title { margin: 0 0 .85rem; font-size: .72rem; font-family: sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #7a7a7a; }
+  .detail-desc { margin: 0; font-size: .92rem; line-height: 1.7; color: #3a3a3a; }
+
+  .source-btn { display: inline-flex; align-items: center; gap: .5rem; padding: .65rem 1.25rem; font-size: .875rem; font-family: inherit; text-decoration: none; border-radius: 4px; background: #1a1a1a; color: #fff; border: 0.5px solid #1a1a1a; transition: background .15s; }
+  .source-btn svg { width: 16px; height: 16px; }
+  .source-btn:hover { background: #8b6914; border-color: #8b6914; }
+
+  /* Sidebar */
+  .detail-sidebar { position: sticky; top: 72px; display: flex; flex-direction: column; gap: 1.25rem; }
+  .widget { border: 0.5px solid #d4c9b0; border-radius: 6px; padding: 1.1rem 1.25rem; background: #fff; }
+  .widget-title { font-size: .68rem; font-family: sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #9a9a9a; margin-bottom: .85rem; padding-bottom: .6rem; border-bottom: 0.5px solid #eee8d8; }
+
+  .widget-dates { background: #faf8f4; }
+  .dates-display { display: flex; flex-direction: column; gap: .6rem; }
+  .date-bloc { display: flex; flex-direction: column; gap: .1rem; }
+  .date-label { font-size: .68rem; font-family: sans-serif; text-transform: uppercase; letter-spacing: .05em; color: #9a9a9a; }
+  .date-val { font-size: .9rem; font-weight: 600; color: #1a1a1a; }
+  .date-duree { font-size: .78rem; color: #8b6914; font-family: sans-serif; padding-top: .25rem; border-top: 0.5px solid #eee8d8; }
+
+  .meta-dl { display: grid; grid-template-columns: auto 1fr; column-gap: .75rem; row-gap: .5rem; margin: 0; font-size: .82rem; }
+  .meta-dl dt { color: #7a7a7a; white-space: nowrap; }
+  .meta-dl dd { margin: 0; color: #1a1a1a; }
+
+  .widget-actions { background: #faf8f4; }
+  .action-btn { display: flex; align-items: center; justify-content: center; padding: .6rem 1rem; font-size: .82rem; font-family: inherit; text-decoration: none; border-radius: 4px; background: #1a1a1a; color: #fff; border: 0.5px solid #1a1a1a; transition: background .15s; }
+  .action-btn:hover { background: #8b6914; border-color: #8b6914; }
+  .back-link { font-size: .8rem; color: #8b6914; text-decoration: none; }
+  .back-link:hover { text-decoration: underline; }
+
+  @media (max-width: 900px) { .detail-page { grid-template-columns: 1fr; } .detail-sidebar { position: static; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); } .back-link { grid-column: 1 / -1; } }
+  @media (max-width: 600px) { .detail-page { padding: 1.25rem 1rem; } .meta-dl { grid-template-columns: 1fr; } }
+</style>

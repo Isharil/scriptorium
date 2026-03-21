@@ -1,0 +1,214 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getRessources, getTutoriels, getBoutiques } from '../lib/nocodb.js';
+
+const q = (Astro.url.searchParams.get('q') ?? '').trim();
+
+let ressources = [], tutoriels = [], boutiques = [];
+
+if (q.length >= 2) {
+  const term = q.toLowerCase();
+
+  try {
+    const [allR, allT, allB] = await Promise.all([
+      getRessources(),
+      getTutoriels(),
+      getBoutiques(),
+    ]);
+
+    ressources = allR.filter(r =>
+      [r.titre, r.description, r.categories, r.regions].some(f =>
+        f?.toLowerCase().includes(term)
+      )
+    );
+
+    tutoriels = allT.filter(t =>
+      [t.titre, t.description, t.domaine].some(f =>
+        f?.toLowerCase().includes(term)
+      )
+    );
+
+    boutiques = allB.filter(b =>
+      [b.nom, b.description, b.ville, b.pays, b.specialites].some(f =>
+        f?.toLowerCase().includes(term)
+      )
+    );
+  } catch (e) {
+    console.warn('[recherche]', e.message);
+  }
+}
+
+const total = ressources.length + tutoriels.length + boutiques.length;
+
+function highlight(text, term) {
+  if (!text || !term) return text ?? '';
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text.replace(new RegExp(`(${escaped})`, 'gi'), '<mark>$1</mark>');
+}
+
+const CAT_LABELS = {
+  tenues:'Tenues', armes:'Armes', armures:'Armures', objets:'Objets',
+  metiers:'Métiers', gastronomie:'Gastronomie', musique:'Musique',
+  architecture:'Architecture', autre:'Autre',
+};
+
+const DOMAINE_LABELS = {
+  broderie:'Broderie', couture:'Couture', maroquinerie:'Maroquinerie',
+  teinture:'Teinture', forge:'Forge', menuiserie:'Menuiserie',
+  cotte_mailles:'Cotte de mailles', autre:'Autre',
+};
+---
+
+<Layout title={q ? `"${q}" — Recherche` : 'Recherche'} description="Recherche dans les ressources, tutoriels et boutiques de Scriptorium">
+
+  <div class="page-head">
+    <div class="page-head-inner">
+      <div>
+        <h1>Recherche</h1>
+        {q && <p class="page-desc">{total} résultat{total !== 1 ? 's' : ''} pour <strong>« {q} »</strong></p>}
+      </div>
+    </div>
+  </div>
+
+  <div class="page-body">
+
+    <!-- Formulaire centré si pas encore de recherche -->
+    {!q ? (
+      <div class="search-center">
+        <form method="get" action="/recherche" class="search-big">
+          <input type="search" name="q" placeholder="Rechercher une ressource, un tutoriel, une boutique…" autofocus autocomplete="off" />
+          <button type="submit">Rechercher</button>
+        </form>
+        <p class="search-hint">Recherche dans les ressources, tutoriels et boutiques.</p>
+      </div>
+    ) : total === 0 ? (
+      <div class="empty-state">
+        <p>Aucun résultat pour <strong>« {q} »</strong>.</p>
+        <p class="empty-hint">Essayez avec d'autres mots-clés ou vérifiez l'orthographe.</p>
+      </div>
+    ) : (
+      <div class="results">
+
+        {ressources.length > 0 && (
+          <section>
+            <h2 class="section-title">
+              Ressources
+              <span class="section-count">{ressources.length}</span>
+            </h2>
+            <ol class="result-list">
+              {ressources.map(r => (
+                <li>
+                  <a href={`/ressources/${r.Id}`} class="result-card">
+                    <div class="rc-type">Ressource</div>
+                    <div class="rc-titre" set:html={highlight(r.titre, q)} />
+                    {r.description && (
+                      <p class="rc-desc" set:html={highlight(r.description.slice(0, 150) + (r.description.length > 150 ? '…' : ''), q)} />
+                    )}
+                    <div class="rc-meta">
+                      {r.categories?.split(',').slice(0,2).map(c => (
+                        <span class="tag">{CAT_LABELS[c.trim()] ?? c.trim()}</span>
+                      ))}
+                    </div>
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+
+        {tutoriels.length > 0 && (
+          <section>
+            <h2 class="section-title">
+              Tutoriels
+              <span class="section-count">{tutoriels.length}</span>
+            </h2>
+            <ol class="result-list">
+              {tutoriels.map(t => (
+                <li>
+                  <a href={`/tutoriels/${t.Id}`} class="result-card">
+                    <div class="rc-type">Tutoriel</div>
+                    <div class="rc-titre" set:html={highlight(t.titre, q)} />
+                    {t.description && (
+                      <p class="rc-desc" set:html={highlight(t.description.slice(0, 150) + (t.description.length > 150 ? '…' : ''), q)} />
+                    )}
+                    <div class="rc-meta">
+                      {t.domaine && <span class="tag">{DOMAINE_LABELS[t.domaine] ?? t.domaine}</span>}
+                    </div>
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+
+        {boutiques.length > 0 && (
+          <section>
+            <h2 class="section-title">
+              Boutiques
+              <span class="section-count">{boutiques.length}</span>
+            </h2>
+            <ol class="result-list">
+              {boutiques.map(b => (
+                <li>
+                  <a href={`/boutiques/${b.Id}`} class="result-card">
+                    <div class="rc-type">Boutique</div>
+                    <div class="rc-titre" set:html={highlight(b.nom, q)} />
+                    {b.description && (
+                      <p class="rc-desc" set:html={highlight(b.description.slice(0, 150) + (b.description.length > 150 ? '…' : ''), q)} />
+                    )}
+                    <div class="rc-meta">
+                      {b.ville && <span class="tag">{[b.ville, b.pays].filter(Boolean).join(', ')}</span>}
+                    </div>
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+
+      </div>
+    )}
+  </div>
+</Layout>
+
+<style>
+  .page-head { background: #faf8f4; border-bottom: 0.5px solid #d4c9b0; padding: 2rem 1.5rem; }
+  .page-head-inner { max-width: 900px; margin: 0 auto; }
+  h1 { margin: 0 0 0.25rem; font-size: 1.75rem; font-family: 'Georgia', serif; }
+  .page-desc { margin: 0; font-size: 0.875rem; color: #7a7a7a; }
+
+  .page-body { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  /* Pas encore de recherche */
+  .search-center { display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 4rem 1rem; }
+  .search-big { display: flex; width: 100%; max-width: 560px; gap: 0; }
+  .search-big input { flex: 1; padding: .6rem 1rem; font-size: .95rem; font-family: inherit; border: 0.5px solid #d4c9b0; border-right: none; border-radius: 4px 0 0 4px; outline: none; background: #faf8f4; }
+  .search-big input:focus { border-color: #8b6914; }
+  .search-big button { padding: .6rem 1.25rem; font-size: .9rem; font-family: inherit; background: #1a1a1a; color: #fff; border: none; border-radius: 0 4px 4px 0; cursor: pointer; transition: background .15s; }
+  .search-big button:hover { background: #8b6914; }
+  .search-hint { font-size: .8rem; color: #9a9a9a; }
+
+  /* Aucun résultat */
+  .empty-state { padding: 4rem 1rem; text-align: center; color: #5a5a5a; }
+  .empty-hint { font-size: .85rem; color: #9a9a9a; margin-top: .5rem; }
+
+  /* Résultats */
+  .results { display: flex; flex-direction: column; gap: 2.5rem; }
+  .section-title { display: flex; align-items: center; gap: .75rem; font-size: 1rem; font-family: sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #5a5a5a; margin: 0 0 1rem; padding-bottom: .5rem; border-bottom: 0.5px solid #eee8d8; }
+  .section-count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 .35rem; font-size: .72rem; background: #f5f0e8; color: #8b6914; border: 0.5px solid #d4c9b0; border-radius: 10px; }
+
+  .result-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+
+  .result-card { display: block; padding: 1rem 1.25rem; border: 0.5px solid #d4c9b0; border-radius: 6px; background: #fff; text-decoration: none; color: inherit; transition: border-color .15s, box-shadow .15s; }
+  .result-card:hover { border-color: #8b6914; box-shadow: 0 2px 10px rgba(139,105,20,.07); }
+
+  .rc-type { font-size: .65rem; font-family: sans-serif; text-transform: uppercase; letter-spacing: .06em; color: #8b6914; margin-bottom: .2rem; }
+  .rc-titre { font-size: 1rem; font-weight: 600; color: #1a1a1a; margin-bottom: .3rem; }
+  .rc-desc { margin: 0 0 .5rem; font-size: .82rem; color: #5a5a5a; line-height: 1.55; }
+  .rc-meta { display: flex; flex-wrap: wrap; gap: .3rem; }
+  .tag { font-size: .68rem; font-family: sans-serif; background: #f5f5f0; color: #6a6a6a; border: 0.5px solid #e0e0d0; border-radius: 3px; padding: .1rem .35rem; }
+
+  :global(mark) { background: #fef3c7; color: inherit; border-radius: 2px; padding: 0 1px; }
+
+  @media (max-width: 600px) { .page-head { padding: 1.25rem 1rem; } .page-body { padding: 1.25rem 1rem; } }
+</style>

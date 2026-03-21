@@ -60,10 +60,14 @@ const error   = Astro.url.searchParams.get('err');
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
             Boutique
           </button>
+          <button type="button" class:list={['type-btn', { 'type-btn-active': typePre === 'evenement' }]} data-type="evenement">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>
+            Événement
+          </button>
         </div>
 
-        <!-- Formulaire : Ressource / Tutoriel (URL vers file IA) -->
-        <form id="form-ressource" class:list={['submit-form', { hidden: typePre === 'boutique' }]}
+        <!-- Formulaire : Ressource -->
+        <form id="form-ressource" class:list={['submit-form', { hidden: typePre !== 'ressource' }]}
               method="POST" action="/api/soumettre">
 
           <input type="hidden" name="type" value="ressource" />
@@ -98,17 +102,15 @@ const error   = Astro.url.searchParams.get('err');
           </div>
 
           <div class="field">
-            <label for="commentaire" class="field-label">Commentaire (optionnel)</label>
-            <textarea id="commentaire" name="commentaire" rows="4" class="field-textarea"
+            <label for="commentaire_r" class="field-label">Commentaire (optionnel)</label>
+            <textarea id="commentaire_r" name="commentaire" rows="4" class="field-textarea"
                       placeholder="Pourquoi soumettez-vous cette ressource ? Y a-t-il des points d'attention ?"></textarea>
           </div>
 
-          <div class="field-row">
-            <div class="field" style="flex:1">
-              <label for="discourse_user" class="field-label">Nom d'utilisateur Discourse</label>
-              <input id="discourse_user" name="discourse_user" type="text"
-                     placeholder="votre_pseudo" class="field-input" />
-            </div>
+          <div class="field">
+            <label for="discourse_user_r" class="field-label">Nom d'utilisateur Discourse</label>
+            <input id="discourse_user_r" name="discourse_user" type="text"
+                   placeholder="votre_pseudo" class="field-input" />
           </div>
 
           <div class="submit-footer">
@@ -117,6 +119,164 @@ const error   = Astro.url.searchParams.get('err');
               Votre soumission sera analysée puis soumise à validation communautaire.
             </p>
             <button type="submit" class="btn-submit">Soumettre</button>
+          </div>
+        </form>
+
+        <!-- Formulaire : Tutoriel -->
+        <form id="form-tutoriel" class:list={['submit-form', { hidden: typePre !== 'tutoriel' }]}
+              method="POST" action="/api/soumettre">
+
+          <input type="hidden" name="type" value="tutoriel" />
+
+          <div class="field">
+            <label for="url_tuto" class="field-label">
+              URL du tutoriel <span class="required" aria-label="requis">*</span>
+            </label>
+            <input id="url_tuto" name="url_soumise" type="url" required
+                   placeholder="https://youtube.com/… ou https://monblog.fr/…"
+                   class="field-input" />
+            <p class="field-help">Lien vers la vidéo, l'article ou le site de tutoriels.</p>
+          </div>
+
+          <div class="field-row">
+            <div class="field" style="flex:1">
+              <label for="type_contenu_t" class="field-label">Type</label>
+              <select id="type_contenu_t" name="type_contenu" class="field-select">
+                <option value="tutoriel">Tutoriel — objectif précis</option>
+                <option value="site_tutoriels">Site de tutoriels — plusieurs guides</option>
+              </select>
+            </div>
+            <div class="field" style="flex:1">
+              <label for="type_media_t" class="field-label">Format</label>
+              <select id="type_media_t" name="type_media" class="field-select">
+                <option value="">— Choisir —</option>
+                <option value="video">▶ Vidéo</option>
+                <option value="article">📝 Article / Blog</option>
+                <option value="pdf">📄 PDF</option>
+                <option value="image_serie">🖼 Série d'images</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="domaine_t" class="field-label">Domaine</label>
+            <select id="domaine_t" name="domaine" class="field-select">
+              <option value="">— Choisir —</option>
+              <option value="couture">Couture / Costume</option>
+              <option value="broderie">Broderie</option>
+              <option value="teinture">Teinture</option>
+              <option value="maroquinerie">Maroquinerie / Cuir</option>
+              <option value="forge">Forge / Métal</option>
+              <option value="cotte_mailles">Cotte de mailles</option>
+              <option value="menuiserie">Menuiserie / Bois</option>
+              <option value="autre">Autre</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label class="toggle-label">
+              <input type="checkbox" name="sources_citees" value="1" />
+              Des sources historiques sont citées dans ce tutoriel
+            </label>
+          </div>
+
+          <div class="field">
+            <label for="commentaire_t" class="field-label">Commentaire (optionnel)</label>
+            <textarea id="commentaire_t" name="commentaire" rows="3" class="field-textarea"
+                      placeholder="Points forts, niveau requis, matériaux utilisés…"></textarea>
+          </div>
+
+          <div class="field">
+            <label for="discourse_user_t" class="field-label">Nom d'utilisateur Discourse</label>
+            <input id="discourse_user_t" name="discourse_user" type="text"
+                   placeholder="votre_pseudo" class="field-input" />
+          </div>
+
+          <div class="submit-footer">
+            <p class="submit-note">
+              <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M15 8A7 7 0 110 8a7 7 0 0115 0zM9 5a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L9 8.586V5z" clip-rule="evenodd"/></svg>
+              Le tutoriel sera vérifié avant publication.
+            </p>
+            <button type="submit" class="btn-submit">Proposer le tutoriel</button>
+          </div>
+        </form>
+
+        <!-- Formulaire : Événement -->
+        <form id="form-evenement" class:list={['submit-form', { hidden: typePre !== 'evenement' }]}
+              method="POST" action="/api/soumettre">
+
+          <input type="hidden" name="type" value="evenement" />
+
+          <div class="field">
+            <label for="nom_evt" class="field-label">
+              Nom de l'événement <span class="required" aria-label="requis">*</span>
+            </label>
+            <input id="nom_evt" name="nom" type="text" required
+                   placeholder="Médiévales de Provins 2026"
+                   class="field-input" />
+          </div>
+
+          <div class="field-row">
+            <div class="field" style="flex:1">
+              <label for="type_evt" class="field-label">Type</label>
+              <select id="type_evt" name="type_evt" class="field-select">
+                <option value="marche">Marché / Fête médiévale</option>
+                <option value="festival">Festival</option>
+                <option value="tournoi">Tournoi</option>
+                <option value="stage">Stage / Atelier</option>
+                <option value="conference">Conférence</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field" style="flex:1">
+              <label for="date_debut_evt" class="field-label">
+                Date de début <span class="required">*</span>
+              </label>
+              <input id="date_debut_evt" name="date_debut" type="date" required class="field-input" />
+            </div>
+            <div class="field" style="flex:1">
+              <label for="date_fin_evt" class="field-label">Date de fin</label>
+              <input id="date_fin_evt" name="date_fin" type="date" class="field-input" />
+              <p class="field-help">Laisser vide si événement sur une seule journée.</p>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field" style="flex:1">
+              <label for="ville_evt" class="field-label">Ville <span class="required">*</span></label>
+              <input id="ville_evt" name="ville" type="text" required placeholder="Provins" class="field-input" />
+            </div>
+            <div class="field" style="flex:1">
+              <label for="pays_evt" class="field-label">Pays</label>
+              <input id="pays_evt" name="pays" type="text" placeholder="France" class="field-input" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="url_evt" class="field-label">Site officiel</label>
+            <input id="url_evt" name="url" type="url" placeholder="https://…" class="field-input" />
+          </div>
+
+          <div class="field">
+            <label for="description_evt" class="field-label">Description</label>
+            <textarea id="description_evt" name="description" rows="3" class="field-textarea"
+                      placeholder="Public visé, activités proposées, entrée payante ou gratuite…"></textarea>
+          </div>
+
+          <div class="field">
+            <label for="discourse_user_e" class="field-label">Nom d'utilisateur Discourse</label>
+            <input id="discourse_user_e" name="discourse_user" type="text"
+                   placeholder="votre_pseudo" class="field-input" />
+          </div>
+
+          <div class="submit-footer">
+            <p class="submit-note">
+              <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M15 8A7 7 0 110 8a7 7 0 0115 0zM9 5a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L9 8.586V5z" clip-rule="evenodd"/></svg>
+              L'événement sera vérifié avant publication.
+            </p>
+            <button type="submit" class="btn-submit">Proposer l'événement</button>
           </div>
         </form>
 
@@ -249,10 +409,13 @@ const error   = Astro.url.searchParams.get('err');
   </div>
 
   <script>
-    // Switcher de type
-    const typeBtns = document.querySelectorAll('.type-btn');
-    const formRessource = document.getElementById('form-ressource');
-    const formBoutique  = document.getElementById('form-boutique');
+    const typeBtns    = document.querySelectorAll('.type-btn');
+    const forms = {
+      ressource:  document.getElementById('form-ressource'),
+      tutoriel:   document.getElementById('form-tutoriel'),
+      evenement:  document.getElementById('form-evenement'),
+      boutique:   document.getElementById('form-boutique'),
+    };
 
     typeBtns.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -260,18 +423,10 @@ const error   = Astro.url.searchParams.get('err');
         btn.classList.add('type-btn-active');
 
         const type = btn.dataset.type;
-        if (type === 'boutique') {
-          formRessource?.classList.add('hidden');
-          formBoutique?.classList.remove('hidden');
-        } else {
-          formRessource?.classList.remove('hidden');
-          formBoutique?.classList.add('hidden');
-          // Mettre à jour le champ caché
-          const hiddenType = formRessource?.querySelector('input[name="type"]');
-          if (hiddenType) hiddenType.value = type;
-        }
+        Object.entries(forms).forEach(([key, form]) => {
+          form?.classList.toggle('hidden', key !== type);
+        });
 
-        // Mettre à jour l'URL sans recharger
         const url = new URL(window.location.href);
         url.searchParams.set('type', type);
         window.history.replaceState({}, '', url);

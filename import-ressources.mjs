@@ -246,12 +246,15 @@ function parseExcel(filePath) {
         date_soumission:  date,
       });
 
-    } else if (typeLC === 'reconstitution documentée' || typeLC === 'reconstitution documentee') {
+    } else if (typeLC === 'reconstitution documentée' || typeLC === 'reconstitution documentee'
+            || typeLC === 'site de tutoriels'         || typeLC === 'site tutoriels') {
       // ── TUTORIEL ──────────────────────────────────────────────────────────
+      const isSite = typeLC.includes('site');
       tutoriels.push({
         titre:           nom,
         url:             url,
         type_media:      mapTypeMedia(url),
+        type_contenu:    isSite ? 'site_tutoriels' : 'tutoriel',
         domaine:         mapDomaine(thema),
         sources_citees:  mapSourcesCitees(rigueur),
         statut:          mapStatut(statut),

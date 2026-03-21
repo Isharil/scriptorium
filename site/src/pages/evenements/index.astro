@@ -1,0 +1,263 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getEvenements } from '../../lib/nocodb.js';
+
+let evenements = [];
+try { evenements = await getEvenements(); }
+catch (e) { console.warn('[evenements]', e.message); }
+
+const params  = Astro.url.searchParams;
+const qQ      = params.get('q')    ?? '';
+const qType   = params.get('type') ?? '';
+const qPasse  = params.get('passes') === '1';
+
+const TYPES = [
+  { value: 'marche',      label: 'Marché / Fête'   },
+  { value: 'festival',    label: 'Festival'         },
+  { value: 'tournoi',     label: 'Tournoi'          },
+  { value: 'stage',       label: 'Stage / Atelier'  },
+  { value: 'conference',  label: 'Conférence'       },
+];
+
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+
+const filtres = evenements.filter(e => {
+  const dateDebut = e.date_debut ? new Date(e.date_debut) : null;
+  const dateFin   = e.date_fin   ? new Date(e.date_fin)   : dateDebut;
+
+  // Par défaut on cache les événements passés
+  if (!qPasse && dateFin && dateFin < today) return false;
+
+  if (qType && e.type !== qType) return false;
+  if (qQ) {
+    const hay = `${e.nom} ${e.ville} ${e.pays} ${e.description ?? ''}`.toLowerCase();
+    if (!hay.includes(qQ.toLowerCase())) return false;
+  }
+  return true;
+});
+
+const hasFilters = qQ || qType || qPasse;
+
+function buildUrl(ov) {
+  const p = new URLSearchParams({
+    ...(qQ     ? { q: qQ }       : {}),
+    ...(qType  ? { type: qType } : {}),
+    ...(qPasse ? { passes: '1' } : {}),
+    ...ov,
+  });
+  for (const [k, v] of [...p.entries()]) { if (!v) p.delete(k); }
+  const qs = p.toString();
+  return `/evenements${qs ? '?' + qs : ''}`;
+}
+
+function fmtDate(d) {
+  if (!d) return null;
+  return new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function fmtMois(d) {
+  if (!d) return null;
+  return new Date(d).toLocaleDateString('fr-FR', { month: 'short' }).toUpperCase();
+}
+
+function fmtJour(d) {
+  if (!d) return null;
+  return new Date(d).getDate();
+}
+
+function isPasse(e) {
+  const ref = e.date_fin ? new Date(e.date_fin) : e.date_debut ? new Date(e.date_debut) : null;
+  return ref && ref < today;
+}
+
+function duree(e) {
+  if (!e.date_debut || !e.date_fin) return null;
+  const d1 = new Date(e.date_debut);
+  const d2 = new Date(e.date_fin);
+  const diff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+  return diff > 0 ? `${diff + 1} jours` : null;
+}
+
+const typeLabel = v => TYPES.find(t => t.value === v)?.label ?? v;
+---
+
+<Layout title="Événements" description="Médiévales, GN médiévaux, stages et reconstitutions en Europe.">
+
+  <div class="page-head">
+    <div class="page-head-inner">
+      <div>
+        <h1>Événements</h1>
+        <p class="page-desc">
+          {filtres.length} événement{filtres.length !== 1 ? 's' : ''}
+          {hasFilters ? ' trouvé·s' : qPasse ? '' : ' à venir'}
+        </p>
+      </div>
+      <div class="head-actions">
+        <a href="/carte?vue=evenements" class="btn-secondary">🗺 Voir la carte</a>
+        <a href="https://forum.scriptorium.fr" target="_blank" rel="noopener" class="btn-primary">+ Proposer un événement</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-body">
+
+    <!-- Filtres -->
+    <aside class="filtres">
+      <form method="get" action="/evenements">
+
+        <div class="filtre-group">
+          <label for="q" class="filtre-label">Recherche</label>
+          <div class="search-wrap">
+            <svg class="search-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd"/></svg>
+            <input id="q" type="search" name="q" value={qQ} placeholder="Nom, ville…" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="filtre-group">
+          <label class="filtre-label">Type</label>
+          <div class="chip-group">
+            <a href={buildUrl({ type: '' })} class:list={['chip', { 'chip-active': !qType }]}>Tous</a>
+            {TYPES.map(t => (
+              <a href={buildUrl({ type: t.value })} class:list={['chip', { 'chip-active': qType === t.value }]}>{t.label}</a>
+            ))}
+          </div>
+        </div>
+
+        <div class="filtre-group">
+          <label class="toggle-label">
+            <input type="checkbox" name="passes" value="1" checked={qPasse} onchange="this.form.submit()" />
+            Inclure les événements passés
+          </label>
+        </div>
+
+        {hasFilters && <a href="/evenements" class="btn-reset">Réinitialiser</a>}
+      </form>
+    </aside>
+
+    <!-- Liste -->
+    <section class="evenements-wrap">
+      <div class="sort-bar">
+        <span class="sort-count">{filtres.length} résultat{filtres.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {filtres.length === 0 ? (
+        <div class="empty-state">
+          <p>Aucun événement à venir pour le moment.</p>
+          {!qPasse && <a href={buildUrl({ passes: '1' })} class="link-reset">Voir les événements passés</a>}
+          {hasFilters && <a href="/evenements" class="link-reset">Effacer les filtres</a>}
+        </div>
+      ) : (
+        <ol class="evenements-list">
+          {filtres.map(e => (
+            <li class:list={['evt-item', { 'evt-passe': isPasse(e) }]}>
+
+              <!-- Bloc date -->
+              <div class="evt-date-bloc" aria-label={fmtDate(e.date_debut) ?? ''}>
+                <span class="evt-mois">{fmtMois(e.date_debut) ?? '—'}</span>
+                <span class="evt-jour">{fmtJour(e.date_debut) ?? '?'}</span>
+              </div>
+
+              <!-- Contenu -->
+              <div class="evt-content">
+                <div class="evt-meta">
+                  {e.type && <span class="evt-type">{typeLabel(e.type)}</span>}
+                  {isPasse(e) && <span class="evt-badge-passe">Passé</span>}
+                  {duree(e) && <span class="evt-duree">{duree(e)}</span>}
+                </div>
+
+                <a href={`/evenements/${e.Id}`} class="evt-titre">{e.nom}</a>
+
+                <div class="evt-lieu">
+                  {[e.ville, e.pays].filter(Boolean).join(', ')}
+                  {e.date_fin && e.date_fin !== e.date_debut && (
+                    <span class="evt-dates-range">· jusqu'au {fmtDate(e.date_fin)}</span>
+                  )}
+                </div>
+
+                {e.description && (
+                  <p class="evt-desc">{e.description.slice(0, 140)}{e.description.length > 140 ? '…' : ''}</p>
+                )}
+              </div>
+
+              <!-- Lien externe -->
+              {e.url && (
+                <a href={e.url} target="_blank" rel="noopener noreferrer" class="evt-ext" title="Site officiel">
+                  <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clip-rule="evenodd"/><path fill-rule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clip-rule="evenodd"/></svg>
+                </a>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  </div>
+</Layout>
+
+<style>
+  .page-head { background: #faf8f4; border-bottom: 0.5px solid #d4c9b0; padding: 2rem 1.5rem; }
+  .page-head-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+  h1 { margin: 0 0 .25rem; font-size: 1.75rem; font-family: 'Georgia', serif; }
+  .page-desc { margin: 0; font-size: .875rem; color: #7a7a7a; }
+  .head-actions { display: flex; gap: .75rem; flex-wrap: wrap; }
+  .btn-primary { display: inline-block; padding: .5rem 1rem; font-size: .8rem; font-family: inherit; text-decoration: none; color: #fff; background: #1a1a1a; border: 0.5px solid #1a1a1a; border-radius: 4px; transition: background .15s; white-space: nowrap; }
+  .btn-primary:hover { background: #8b6914; border-color: #8b6914; }
+  .btn-secondary { display: inline-block; padding: .5rem 1rem; font-size: .8rem; text-decoration: none; color: #1a1a1a; border: 0.5px solid #d4c9b0; border-radius: 4px; transition: border-color .15s; white-space: nowrap; }
+  .btn-secondary:hover { border-color: #8b6914; }
+
+  .page-body { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; display: grid; grid-template-columns: 220px 1fr; gap: 3rem; align-items: start; }
+
+  /* Filtres */
+  .filtres { position: sticky; top: 72px; display: flex; flex-direction: column; }
+  .filtre-group { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 1.25rem; }
+  .filtre-group:first-child { margin-top: 0; }
+  .filtre-label { font-size: .7rem; font-family: sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: #7a7a7a; }
+  .search-wrap { position: relative; }
+  .search-icon { position: absolute; left: .6rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: #9a9a9a; pointer-events: none; }
+  .search-wrap input { width: 100%; padding: .4rem .6rem .4rem 2rem; font-size: .8rem; font-family: inherit; border: 0.5px solid #d4c9b0; border-radius: 4px; background: #faf8f4; outline: none; }
+  .search-wrap input:focus { border-color: #8b6914; }
+  .chip-group { display: flex; flex-wrap: wrap; gap: .3rem; }
+  .chip { display: inline-block; padding: .18rem .5rem; font-size: .7rem; font-family: sans-serif; border: 0.5px solid #d4c9b0; border-radius: 3px; color: #4a4a4a; text-decoration: none; background: #fff; transition: border-color .12s, color .12s; }
+  .chip:hover { border-color: #8b6914; color: #8b6914; }
+  .chip-active { background: #8b6914 !important; border-color: #8b6914 !important; color: #fff !important; }
+  .toggle-label { display: flex; align-items: center; gap: .5rem; font-size: .85rem; color: #3a3a3a; cursor: pointer; }
+  .btn-reset { display: block; padding: .4rem; font-size: .78rem; text-align: center; color: #8b3a1a; text-decoration: none; border: 0.5px dashed #d4b0b0; border-radius: 4px; background: #fff8f8; }
+
+  /* Liste */
+  .sort-bar { display: flex; justify-content: flex-end; margin-bottom: 1rem; padding-bottom: .75rem; border-bottom: 0.5px solid #eee8d8; }
+  .sort-count { font-size: .78rem; color: #9a9a9a; }
+
+  .evenements-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+
+  .evt-item { display: flex; align-items: flex-start; gap: 1.25rem; padding: 1.25rem 0; border-bottom: 0.5px solid #eee8d8; }
+  .evt-item:last-child { border-bottom: none; }
+  .evt-passe { opacity: .6; }
+
+  /* Bloc date */
+  .evt-date-bloc { flex-shrink: 0; width: 52px; text-align: center; background: #faf8f4; border: 0.5px solid #d4c9b0; border-radius: 6px; padding: .4rem .25rem; display: flex; flex-direction: column; align-items: center; }
+  .evt-mois { font-size: .6rem; font-family: sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #8b6914; }
+  .evt-jour { font-size: 1.5rem; font-weight: 700; color: #1a1a1a; line-height: 1.1; font-family: 'Georgia', serif; }
+
+  /* Contenu */
+  .evt-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .35rem; }
+  .evt-meta { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; }
+  .evt-type { font-size: .7rem; font-family: sans-serif; background: #f0eaff; color: #3a1a6a; border: 0.5px solid #c9b8e8; border-radius: 3px; padding: .1rem .4rem; }
+  .evt-badge-passe { font-size: .7rem; font-family: sans-serif; background: #f5f5f0; color: #7a7a7a; border: 0.5px solid #d0d0c8; border-radius: 3px; padding: .1rem .4rem; }
+  .evt-duree { font-size: .7rem; color: #9a9a9a; font-family: sans-serif; }
+  .evt-titre { font-size: 1.05rem; font-weight: 600; color: #1a1a1a; text-decoration: none; line-height: 1.35; }
+  .evt-titre:hover { color: #8b6914; }
+  .evt-lieu { font-size: .8rem; color: #6a6a6a; }
+  .evt-dates-range { font-size: .78rem; color: #9a9a9a; }
+  .evt-desc { margin: 0; font-size: .82rem; color: #5a5a5a; line-height: 1.55; }
+
+  /* Lien externe */
+  .evt-ext { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; color: #9a9a9a; border: 0.5px solid #e0ddd0; border-radius: 4px; transition: color .12s, border-color .12s; }
+  .evt-ext svg { width: 15px; height: 15px; }
+  .evt-ext:hover { color: #8b6914; border-color: #8b6914; }
+
+  .empty-state { display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 4rem 2rem; text-align: center; color: #7a7a7a; border: 0.5px dashed #d4c9b0; border-radius: 6px; }
+  .link-reset { font-size: .8rem; color: #8b6914; text-decoration: none; }
+
+  @media (max-width: 900px) { .page-body { grid-template-columns: 1fr; } .filtres { position: static; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }
+  @media (max-width: 600px) { .page-head { padding: 1.25rem 1rem; } .page-body { padding: 1.25rem 1rem; } .filtres { grid-template-columns: 1fr; } }
+</style>

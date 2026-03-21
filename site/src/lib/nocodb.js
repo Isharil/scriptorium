@@ -36,6 +36,41 @@ async function fetchRows(tableId, params = {}) {
 }
 
 /**
+ * Récupère toutes les lignes en paginant automatiquement.
+ * @param {string} tableId
+ * @param {Record<string, string>} [params]
+ */
+async function fetchAllRows(tableId, params = {}) {
+  const all = [];
+  let offset = 0;
+  const limit = 200;
+
+  while (true) {
+    const url = new URL(`/api/v1/db/data/noco/${BASE_ID}/${tableId}`, BASE_URL);
+    url.searchParams.set('limit', String(limit));
+    url.searchParams.set('offset', String(offset));
+    for (const [key, value] of Object.entries(params)) {
+      url.searchParams.set(key, value);
+    }
+
+    const res = await fetch(url.toString(), { headers: { 'xc-token': API_TOKEN } });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`NocoDB ${res.status} [${tableId}]: ${text}`);
+    }
+
+    const data = await res.json();
+    const list = data.list ?? [];
+    all.push(...list);
+
+    if (list.length < limit) break;
+    offset += limit;
+  }
+
+  return all;
+}
+
+/**
  * @param {string} tableId
  * @param {string|number} id
  */
@@ -89,10 +124,15 @@ export async function getTutoriels() {
 
 /** Tous les événements approuvés */
 export async function getEvenements() {
-  return fetchRows(TABLE_IDS.evenements, {
+  return fetchAllRows(TABLE_IDS.evenements, {
     where: '(statut,eq,approuve)',
     sort:  'date_debut',
   });
+}
+
+/** Un événement par son ID */
+export async function getEvenementById(id) {
+  return fetchRowById(TABLE_IDS.evenements, id);
 }
 
 /** Une boutique par son ID */
