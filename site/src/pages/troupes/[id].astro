@@ -1,17 +1,17 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-import { getGroupes, getGroupeById } from '../../lib/nocodb.js';
+import { getTroupes, getTroupeById } from '../../lib/nocodb.js';
 
 export async function getStaticPaths() {
   try {
-    const groupes = await getGroupes();
-    return groupes.map(g => ({ params: { id: String(g.Id) } }));
+    const troupes = await getTroupes();
+    return troupes.map(g => ({ params: { id: String(g.Id) } }));
   } catch { return []; }
 }
 
 const { id } = Astro.params;
-const g = await getGroupeById(id).catch(() => null);
-if (!g) return Astro.redirect('/groupes');
+const g = await getTroupeById(id).catch(() => null);
+if (!g) return Astro.redirect('/troupes');
 
 const TYPES = {
   troupe_reconstitution: 'Troupe de reconstitution',
@@ -61,7 +61,7 @@ const reseaux = [
   <nav class="breadcrumb" aria-label="Fil d'Ariane">
     <ol>
       <li><a href="/">Accueil</a></li><li aria-hidden="true">›</li>
-      <li><a href="/groupes">Groupes</a></li><li aria-hidden="true">›</li>
+      <li><a href="/troupes">Troupes</a></li><li aria-hidden="true">›</li>
       <li aria-current="page">{g.nom}</li>
     </ol>
   </nav>
@@ -138,7 +138,7 @@ const reseaux = [
         </div>
       )}
 
-      <a href="/groupes" class="back-link">← Retour aux groupes</a>
+      <a href="/troupes" class="back-link">← Retour aux troupes</a>
     </aside>
   </div>
 </Layout>

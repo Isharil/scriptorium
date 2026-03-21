@@ -1,10 +1,10 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-import { getGroupes } from '../../lib/nocodb.js';
+import { getTroupes } from '../../lib/nocodb.js';
 
-let groupes = [];
-try { groupes = await getGroupes(); }
-catch (e) { console.warn('[groupes]', e.message); }
+let troupes = [];
+try { troupes = await getTroupes(); }
+catch (e) { console.warn('[troupes]', e.message); }
 
 const params  = Astro.url.searchParams;
 const qQ      = params.get('q')      ?? '';
@@ -45,7 +45,7 @@ function matchMulti(field, value) {
   return String(field).split(',').map(v => v.trim()).includes(value);
 }
 
-const filtres = groupes.filter(g => {
+const filtres = troupes.filter(g => {
   if (qType   && g.type    !== qType)              return false;
   if (qPeriode && !matchMulti(g.periodes, qPeriode)) return false;
   if (qRegion  && !matchMulti(g.regions,  qRegion))  return false;
@@ -68,7 +68,7 @@ function buildUrl(ov) {
   });
   for (const [k, v] of [...p.entries()]) { if (!v) p.delete(k); }
   const qs = p.toString();
-  return `/groupes${qs ? '?' + qs : ''}`;
+  return `/troupes${qs ? '?' + qs : ''}`;
 }
 
 const typeLabel = v => TYPES.find(t => t.value === v)?.label ?? v;
@@ -79,19 +79,19 @@ function parseMulti(val, map) {
 }
 ---
 
-<Layout title="Groupes" description="Troupes de reconstitution, groupes de musique médiévale, compagnies de spectacle et associations.">
+<Layout title="Troupes" description="Troupes de reconstitution, groupes de musique médiévale, compagnies de spectacle et associations.">
 
   <div class="page-head">
     <div class="page-head-inner">
       <div>
-        <h1>Groupes</h1>
+        <h1>Troupes</h1>
         <p class="page-desc">
-          {filtres.length} groupe{filtres.length !== 1 ? 's' : ''}
-          {hasFilters ? ' trouvé·s' : ' référencés'}
+          {filtres.length} troupe{filtres.length !== 1 ? 's' : ''}
+          {hasFilters ? ' trouvée·s' : ' référencées'}
         </p>
       </div>
       <a href="https://forum.scriptorium.fr" target="_blank" rel="noopener" class="btn-primary">
-        + Référencer un groupe
+        + Référencer une troupe
       </a>
     </div>
   </div>
@@ -100,7 +100,7 @@ function parseMulti(val, map) {
 
     <!-- Filtres -->
     <aside class="filtres">
-      <form method="get" action="/groupes">
+      <form method="get" action="/troupes">
 
         <div class="filtre-group">
           <label for="q" class="filtre-label">Recherche</label>
@@ -136,7 +136,7 @@ function parseMulti(val, map) {
           </select>
         </div>
 
-        {hasFilters && <a href="/groupes" class="btn-reset">Réinitialiser</a>}
+        {hasFilters && <a href="/troupes" class="btn-reset">Réinitialiser</a>}
       </form>
     </aside>
 
@@ -148,8 +148,8 @@ function parseMulti(val, map) {
 
       {filtres.length === 0 ? (
         <div class="empty-state">
-          <p>Aucun groupe ne correspond à ces critères.</p>
-          {hasFilters && <a href="/groupes" class="link-reset">Effacer les filtres</a>}
+          <p>Aucune troupe ne correspond à ces critères.</p>
+          {hasFilters && <a href="/troupes" class="link-reset">Effacer les filtres</a>}
         </div>
       ) : (
         <ol class="groupes-grid">
@@ -158,7 +158,7 @@ function parseMulti(val, map) {
             const regions  = parseMulti(g.regions,  REGIONS).slice(0, 2);
             return (
               <li>
-                <a href={`/groupes/${g.Id}`} class="groupe-card">
+                <a href={`/troupes/${g.Id}`} class="groupe-card">
                   <div class="gc-header">
                     <span class="gc-nom">{g.nom}</span>
                   </div>
