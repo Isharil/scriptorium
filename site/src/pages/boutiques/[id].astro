@@ -1,0 +1,261 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getBoutiques, getBoutiqueById, getAvisBoutique } from '../../lib/nocodb.js';
+
+export async function getStaticPaths() {
+  try {
+    const boutiques = await getBoutiques();
+    return boutiques.map(b => ({ params: { id: String(b.Id) } }));
+  } catch { return []; }
+}
+
+const { id } = Astro.params;
+const [b, avis] = await Promise.all([
+  getBoutiqueById(id).catch(() => null),
+  getAvisBoutique(id).catch(() => []),
+]);
+
+if (!b) return Astro.redirect('/boutiques');
+
+const TYPE_LABELS = {
+  boutique_en_ligne: 'Boutique en ligne', atelier_physique: 'Atelier physique',
+  les_deux: 'En ligne & atelier', marche_uniquement: 'Marchés uniquement',
+};
+
+const SPEC_LABELS = {
+  textiles:'Textiles', armes:'Armes', armures:'Armures', maroquinerie:'Maroquinerie',
+  bijoux:'Bijoux', forge:'Forge', mercerie:'Mercerie', livres:'Livres', autre:'Autre',
+};
+
+function parseMulti(val) {
+  if (!val) return [];
+  return String(val).split(',').map(v => v.trim()).filter(Boolean);
+}
+
+function fmt(d) {
+  if (!d) return null;
+  return new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+const specialites = parseMulti(b.specialites).map(v => SPEC_LABELS[v] ?? v);
+const noteArrondie = b.note_moyenne ? Math.round(Number(b.note_moyenne) * 10) / 10 : null;
+
+function etoiles(note) {
+  const n = Math.round(Number(note));
+  return '★'.repeat(n) + '☆'.repeat(5 - n);
+}
+
+const hasMap = b.latitude && b.longitude;
+---
+
+<Layout title={b.nom} description={b.description?.slice(0, 155) ?? `Boutique médiévale : ${b.nom}`}>
+
+  <nav class="breadcrumb" aria-label="Fil d'Ariane">
+    <ol>
+      <li><a href="/">Accueil</a></li><li aria-hidden="true">›</li>
+      <li><a href="/boutiques">Boutiques</a></li><li aria-hidden="true">›</li>
+      <li aria-current="page">{b.nom}</li>
+    </ol>
+  </nav>
+
+  <div class="detail-page">
+    <main class="detail-main">
+
+      <!-- En-tête -->
+      <header class="detail-header">
+        <div class="detail-badges">
+          {b.lien_verifie && <span class="badge-verifie">✓ Lien vérifié</span>}
+          {b.type && <span class="badge-type">{TYPE_LABELS[b.type] ?? b.type}</span>}
+          {b.livraison_europe && <span class="badge-liv">🇪🇺 Livraison Europe</span>}
+        </div>
+
+        <h1 class="detail-titre">{b.nom}</h1>
+
+        {(b.ville || b.pays) && (
+          <p class="detail-lieu">
+            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M9.69 18.933l.003.001C9.89 19.02 10 19 10 19s.11.02.308-.066l.002-.001.006-.003.018-.008a5.741 5.741 0 00.281-.14c.186-.096.446-.24.757-.433.62-.384 1.445-.966 2.274-1.765C15.302 14.988 17 12.493 17 9A7 7 0 103 9c0 3.492 1.698 5.988 3.355 7.584a13.731 13.731 0 002.273 1.765 11.842 11.842 0 00.976.544l.062.029.018.008.006.003zM10 11.25a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5z" clip-rule="evenodd"/></svg>
+            {[b.ville, b.pays].filter(Boolean).join(', ')}
+          </p>
+        )}
+
+        {noteArrondie && (
+          <div class="detail-note">
+            <span class="etoiles">{etoiles(noteArrondie)}</span>
+            <span class="note-val">{noteArrondie} / 5</span>
+            <span class="note-count">({avis.length} avis)</span>
+          </div>
+        )}
+      </header>
+
+      <!-- Description -->
+      {b.description && (
+        <section class="detail-section">
+          <h2 class="section-title">À propos</h2>
+          <p class="detail-desc">{b.description}</p>
+        </section>
+      )}
+
+      <!-- Carte mini (Leaflet) -->
+      {hasMap && (
+        <section class="detail-section">
+          <h2 class="section-title">Localisation</h2>
+          <div id="map" class="mini-map" aria-label={`Carte : ${b.nom}`}></div>
+          <script define:vars={{ lat: b.latitude, lng: b.longitude, nom: b.nom }}>
+            import('https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.esm.js').then(L => {
+              const map = L.map('map', { zoomControl: true, scrollWheelZoom: false }).setView([lat, lng], 13);
+              L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors', maxZoom: 19,
+              }).addTo(map);
+              L.marker([lat, lng]).addTo(map).bindPopup(`<strong>${nom}</strong>`).openPopup();
+            });
+          </script>
+          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        </section>
+      )}
+
+      <!-- Liens -->
+      <section class="detail-section">
+        <h2 class="section-title">Liens</h2>
+        <div class="liens">
+          {b.url_site && (
+            <a href={b.url_site} target="_blank" rel="noopener noreferrer" class="source-btn source-btn-primary">
+              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clip-rule="evenodd"/><path fill-rule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clip-rule="evenodd"/></svg>
+              Visiter la boutique ↗
+            </a>
+          )}
+        </div>
+      </section>
+
+      <!-- Avis -->
+      <section class="detail-section">
+        <h2 class="section-title">Avis de la communauté ({avis.length})</h2>
+        {avis.length === 0 ? (
+          <p class="no-avis">Aucun avis pour l'instant. Soyez le premier à en laisser un !</p>
+        ) : (
+          <ol class="avis-list">
+            {avis.map(a => (
+              <li class="avis-item">
+                <div class="avis-header">
+                  <span class="avis-etoiles">{etoiles(a.note)}</span>
+                  <time class="avis-date" datetime={a.date_avis ?? ''}>{fmt(a.date_avis)}</time>
+                </div>
+                {a.commentaire && <p class="avis-commentaire">{a.commentaire}</p>}
+              </li>
+            ))}
+          </ol>
+        )}
+        <a href={`/avis?boutique=${b.Id}`} class="btn-avis">Laisser un avis</a>
+      </section>
+
+    </main>
+
+    <!-- Sidebar -->
+    <aside class="detail-sidebar">
+      <div class="widget">
+        <div class="widget-title">Informations</div>
+        <dl class="meta-dl">
+          {b.type && (<><dt>Type</dt><dd>{TYPE_LABELS[b.type] ?? b.type}</dd></>)}
+          {specialites.length > 0 && (<><dt>Spécialités</dt><dd class="dd-tags">{specialites.map(s => <span class="s-tag">{s}</span>)}</dd></>)}
+          {b.pays && (<><dt>Pays</dt><dd>{b.pays}</dd></>)}
+          {b.ville && (<><dt>Ville</dt><dd>{b.ville}</dd></>)}
+          {b.livraison_europe != null && (<><dt>Livraison EU</dt><dd>{b.livraison_europe ? 'Oui' : 'Non'}</dd></>)}
+          {b.lien_verifie != null && (<><dt>Lien vérifié</dt><dd>{b.lien_verifie ? 'Oui ✓' : 'Non'}</dd></>)}
+          {b.date_soumission && (<><dt>Ajoutée le</dt><dd><time datetime={b.date_soumission}>{fmt(b.date_soumission)}</time></dd></>)}
+        </dl>
+      </div>
+
+      {noteArrondie && (
+        <div class="widget widget-note">
+          <div class="widget-title">Note moyenne</div>
+          <div class="big-note">{noteArrondie}<span>/5</span></div>
+          <div class="big-etoiles">{etoiles(noteArrondie)}</div>
+          <p class="note-count-p">{avis.length} avis</p>
+        </div>
+      )}
+
+      <div class="widget widget-actions">
+        <a href={b.url_site} target="_blank" rel="noopener noreferrer" class="action-btn">Visiter ↗</a>
+        <a href={`/avis?boutique=${b.Id}`} class="action-btn action-btn-light">Laisser un avis</a>
+        <a href={`/signaler?boutique=${b.Id}`} class="action-btn action-btn-light action-btn-danger">Signaler</a>
+      </div>
+
+      <a href="/boutiques" class="back-link">← Retour aux boutiques</a>
+    </aside>
+  </div>
+</Layout>
+
+<style>
+  .breadcrumb { background: #faf8f4; border-bottom: 0.5px solid #d4c9b0; padding: .6rem 1.5rem; }
+  .breadcrumb ol { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; gap: .5rem; list-style: none; padding: 0; flex-wrap: wrap; }
+  .breadcrumb a { font-size: .78rem; color: #8b6914; text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb [aria-hidden] { color: #ccc; }
+  .breadcrumb [aria-current] { font-size: .78rem; color: #5a5a5a; }
+
+  .detail-page { max-width: 1200px; margin: 0 auto; padding: 2.5rem 1.5rem; display: grid; grid-template-columns: 1fr 280px; gap: 3rem; align-items: start; }
+
+  .detail-header { margin-bottom: 2rem; padding-bottom: 2rem; border-bottom: 0.5px solid #eee8d8; }
+  .detail-badges { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+  .badge-verifie { font-size: .72rem; background: #e8f5e8; color: #1a4a2a; border: 0.5px solid #b0d4b0; border-radius: 3px; padding: .2rem .6rem; }
+  .badge-type { font-size: .72rem; background: #f5f0e8; color: #5a4a1a; border: 0.5px solid #d4c9b0; border-radius: 3px; padding: .2rem .6rem; }
+  .badge-liv { font-size: .72rem; background: #e8eef5; color: #1a2a5a; border: 0.5px solid #b0bdd4; border-radius: 3px; padding: .2rem .6rem; }
+  .detail-titre { margin: 0 0 .5rem; font-size: clamp(1.5rem, 3vw, 2rem); font-family: 'Georgia', serif; color: #1a1a1a; }
+  .detail-lieu { margin: 0 0 .75rem; display: flex; align-items: center; gap: .4rem; font-size: .9rem; color: #5a5a5a; }
+  .detail-lieu svg { width: 16px; height: 16px; color: #8b6914; flex-shrink: 0; }
+  .detail-note { display: flex; align-items: center; gap: .5rem; }
+  .etoiles { color: #8b6914; letter-spacing: -.05em; }
+  .note-val { font-size: .9rem; font-weight: 600; color: #1a1a1a; }
+  .note-count { font-size: .8rem; color: #7a7a7a; }
+
+  .detail-section { margin-bottom: 2rem; padding-bottom: 2rem; border-bottom: 0.5px solid #eee8d8; }
+  .detail-section:last-child { border-bottom: none; }
+  .section-title { margin: 0 0 .85rem; font-size: .72rem; font-family: sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #7a7a7a; }
+  .detail-desc { margin: 0; font-size: .95rem; line-height: 1.75; color: #2a2a2a; white-space: pre-wrap; }
+
+  .mini-map { width: 100%; height: 280px; border: 0.5px solid #d4c9b0; border-radius: 6px; overflow: hidden; margin-bottom: .5rem; }
+
+  .liens { display: flex; flex-wrap: wrap; gap: .75rem; }
+  .source-btn { display: inline-flex; align-items: center; gap: .5rem; padding: .65rem 1.25rem; font-size: .875rem; font-family: inherit; text-decoration: none; border-radius: 4px; border: 0.5px solid transparent; transition: background .15s; }
+  .source-btn svg { width: 16px; height: 16px; }
+  .source-btn-primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .source-btn-primary:hover { background: #8b6914; border-color: #8b6914; }
+
+  /* Avis */
+  .avis-list { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-direction: column; gap: 0; }
+  .avis-item { padding: 1rem 0; border-bottom: 0.5px solid #eee8d8; }
+  .avis-item:last-child { border-bottom: none; }
+  .avis-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .4rem; }
+  .avis-etoiles { color: #8b6914; letter-spacing: -.05em; }
+  .avis-date { font-size: .72rem; color: #9a9a9a; }
+  .avis-commentaire { margin: 0; font-size: .875rem; line-height: 1.6; color: #3a3a3a; }
+  .no-avis { font-size: .875rem; color: #7a7a7a; font-style: italic; margin: 0 0 1rem; }
+  .btn-avis { display: inline-block; padding: .5rem 1rem; font-size: .8rem; font-family: inherit; text-decoration: none; color: #1a1a1a; border: 0.5px solid #d4c9b0; border-radius: 4px; transition: border-color .15s; }
+  .btn-avis:hover { border-color: #8b6914; }
+
+  /* Sidebar */
+  .detail-sidebar { position: sticky; top: 72px; display: flex; flex-direction: column; gap: 1.25rem; }
+  .widget { border: 0.5px solid #d4c9b0; border-radius: 6px; padding: 1.1rem 1.25rem; background: #fff; }
+  .widget-title { font-size: .68rem; font-family: sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #9a9a9a; margin-bottom: .85rem; padding-bottom: .6rem; border-bottom: 0.5px solid #eee8d8; }
+  .meta-dl { display: grid; grid-template-columns: auto 1fr; column-gap: .75rem; row-gap: .5rem; margin: 0; font-size: .82rem; }
+  .meta-dl dt { color: #7a7a7a; white-space: nowrap; }
+  .meta-dl dd { margin: 0; color: #1a1a1a; }
+  .dd-tags { display: flex; flex-wrap: wrap; gap: .3rem; }
+  .s-tag { font-size: .7rem; background: #f5f0e8; color: #5a4a1a; border: 0.5px solid #d4c9b0; border-radius: 3px; padding: .1rem .35rem; }
+  .widget-note { text-align: center; background: #faf8f4; }
+  .big-note { font-size: 2.5rem; font-weight: 700; color: #1a1a1a; line-height: 1; }
+  .big-note span { font-size: 1rem; font-weight: 400; color: #7a7a7a; }
+  .big-etoiles { font-size: 1.3rem; color: #8b6914; letter-spacing: -.05em; margin: .25rem 0; }
+  .note-count-p { margin: 0; font-size: .78rem; color: #7a7a7a; }
+  .widget-actions { display: flex; flex-direction: column; gap: .5rem; background: #faf8f4; }
+  .action-btn { display: flex; align-items: center; justify-content: center; padding: .55rem 1rem; font-size: .82rem; font-family: inherit; text-decoration: none; border-radius: 4px; text-align: center; transition: background .15s; border: 0.5px solid transparent; }
+  .action-btn:not(.action-btn-light) { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .action-btn:not(.action-btn-light):hover { background: #8b6914; border-color: #8b6914; }
+  .action-btn-light { background: #fff; color: #5a5a5a; border-color: #d4c9b0; }
+  .action-btn-light:hover { border-color: #8b6914; color: #8b6914; }
+  .action-btn-danger:hover { border-color: #8b3a1a !important; color: #8b3a1a !important; }
+  .back-link { font-size: .8rem; color: #8b6914; text-decoration: none; }
+  .back-link:hover { text-decoration: underline; }
+
+  @media (max-width: 900px) { .detail-page { grid-template-columns: 1fr; } .detail-sidebar { position: static; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); } .back-link { grid-column: 1 / -1; } }
+  @media (max-width: 600px) { .detail-page { padding: 1.25rem 1rem; } .meta-dl { grid-template-columns: 1fr; } }
+</style>

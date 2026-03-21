@@ -1,0 +1,704 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getRessources, getTutoriels, getEvenements } from '../lib/nocodb.js';
+
+// Récupération des données (silencieuse en cas d'erreur au build)
+let ressources = [], tutoriels = [], evenements = [];
+try {
+  [ressources, tutoriels, evenements] = await Promise.all([
+    getRessources(),
+    getTutoriels(),
+    getEvenements(),
+  ]);
+} catch (e) {
+  console.warn('[index] NocoDB indisponible :', e.message);
+}
+
+// Activité récente : 8 entrées mélangées, triées par date
+const activite = [
+  ...ressources.map(r => ({ ...r, _type: 'ressource' })),
+  ...tutoriels.map(t  => ({ ...t, _type: 'tutoriel'  })),
+]
+  .sort((a, b) => {
+    const da = new Date(a.date_soumission ?? a.date_validation ?? 0).getTime();
+    const db = new Date(b.date_soumission ?? b.date_validation ?? 0).getTime();
+    return db - da;
+  })
+  .slice(0, 8);
+
+// Sidebar : 5 premières ressources comme tendances
+const tendances = ressources.slice(0, 5);
+
+// Prochain événement
+const prochainEvent = evenements.find(e => new Date(e.date_debut) >= new Date()) ?? evenements[0];
+
+// Stats approximatives (réelles)
+const stats = {
+  ressources: ressources.length,
+  tutoriels:  tutoriels.length,
+  evenements: evenements.length,
+};
+
+// Helpers
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function labelType(item) {
+  if (item._type === 'tutoriel') return 'Tutoriel';
+  const labels = {
+    manuscrit: 'Manuscrit', archeologie: 'Archéologie',
+    iconographie: 'Iconographie', traite: 'Traité',
+    article: 'Article', video: 'Vidéo', patron: 'Patron', autre: 'Ressource',
+  };
+  return labels[item.type_source] ?? 'Ressource';
+}
+
+function labelNiveau(val) {
+  const map = { source_primaire: 'Source primaire', academique: 'Académique', communautaire: 'Communautaire', experience: 'Expérience' };
+  return map[val] ?? val;
+}
+
+const RUBRIQUES = [
+  { href: '/ressources?cat=tenues',        label: 'Tenues & textiles',    icon: '🧵' },
+  { href: '/ressources?cat=armes',         label: 'Armes & armures',      icon: '⚔️' },
+  { href: '/ressources?cat=gastronomie',   label: 'Gastronomie',          icon: '🍖' },
+  { href: '/ressources?cat=musique',       label: 'Musique',              icon: '🎵' },
+  { href: '/ressources?cat=architecture',  label: 'Architecture',         icon: '🏰' },
+  { href: '/ressources?cat=metiers',       label: 'Métiers',              icon: '🔨' },
+];
+---
+
+<Layout title="Accueil" description="Plateforme communautaire de ressources médiévales vérifiées par la communauté.">
+
+  <!-- ── Hero ───────────────────────────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="hero-text">
+        <p class="hero-eyebrow">Ressources médiévales libres &amp; vérifiées</p>
+        <h1>Le scriptorium<br />de la reconstitution</h1>
+        <p class="hero-sub">
+          Manuscrits, patrons, tutoriels, boutiques — toutes les sources
+          dont vous avez besoin pour votre pratique médiévale,
+          évaluées et partagées par la communauté.
+        </p>
+        <div class="hero-actions">
+          <a href="/ressources" class="btn-primary">Parcourir les ressources</a>
+          <a href="/rejoindre"  class="btn-secondary">Contribuer</a>
+        </div>
+      </div>
+      <div class="hero-stats">
+        <div class="stat">
+          <span class="stat-value">{stats.ressources || '—'}</span>
+          <span class="stat-label">Ressources</span>
+        </div>
+        <div class="stat-sep"></div>
+        <div class="stat">
+          <span class="stat-value">{stats.tutoriels || '—'}</span>
+          <span class="stat-label">Tutoriels</span>
+        </div>
+        <div class="stat-sep"></div>
+        <div class="stat">
+          <span class="stat-value">{stats.evenements || '—'}</span>
+          <span class="stat-label">Événements</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Corps principal ────────────────────────────────────────────────────── -->
+  <div class="page-body">
+
+    <!-- ── Feed d'activité ──────────────────────────────────────────────────── -->
+    <section class="feed">
+      <header class="feed-header">
+        <h2>Activité récente</h2>
+        <a href="/ressources" class="see-all">Voir tout →</a>
+      </header>
+
+      {activite.length === 0 && (
+        <div class="empty">
+          <p>Aucune ressource pour l'instant. <a href="/rejoindre">Soyez le premier à contribuer.</a></p>
+        </div>
+      )}
+
+      <ol class="feed-list">
+        {activite.map(item => (
+          <li class="feed-item">
+            <div class="feed-item-meta">
+              <span class={`badge badge-${item._type}`}>{labelType(item)}</span>
+              {item.niveau_fiabilite && (
+                <span class="badge badge-niveau">{labelNiveau(item.niveau_fiabilite)}</span>
+              )}
+              <time class="feed-date" datetime={item.date_soumission ?? item.date_validation ?? ''}>
+                {formatDate(item.date_soumission ?? item.date_validation)}
+              </time>
+            </div>
+            <a
+              href={item._type === 'tutoriel' ? `/tutoriels/${item.Id}` : `/ressources/${item.Id}`}
+              class="feed-item-title"
+            >
+              {item.titre}
+            </a>
+            {item.description && (
+              <p class="feed-item-desc">{item.description.slice(0, 140)}{item.description.length > 140 ? '…' : ''}</p>
+            )}
+            <div class="feed-item-foot">
+              {item._type === 'ressource' && item.score_communaute != null && (
+                <span class="feed-score">
+                  <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25z"/></svg>
+                  {item.score_communaute}
+                </span>
+              )}
+              {item._type === 'ressource' && item.url_source && (
+                <a href={item.url_source} target="_blank" rel="noopener noreferrer" class="feed-ext-link">
+                  Source externe ↗
+                </a>
+              )}
+              {item._type === 'tutoriel' && item.domaine && (
+                <span class="feed-tag">{item.domaine.replace(/_/g, ' ')}</span>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <!-- ── Sidebar ───────────────────────────────────────────────────────────── -->
+    <aside class="sidebar">
+
+      <!-- Rubriques -->
+      <div class="widget">
+        <h3 class="widget-title">Rubriques</h3>
+        <ul class="rubrique-list">
+          {RUBRIQUES.map(({ href, label, icon }) => (
+            <li>
+              <a href={href} class="rubrique-link">
+                <span class="rubrique-icon" aria-hidden="true">{icon}</span>
+                {label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <!-- Tendances -->
+      {tendances.length > 0 && (
+        <div class="widget">
+          <h3 class="widget-title">Tendances</h3>
+          <ol class="tendances-list">
+            {tendances.map((r, i) => (
+              <li>
+                <span class="tendance-rank">{i + 1}</span>
+                <a href={`/ressources/${r.Id}`} class="tendance-link">{r.titre}</a>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      <!-- Prochain événement -->
+      {prochainEvent && (
+        <div class="widget widget-event">
+          <h3 class="widget-title">Prochain événement</h3>
+          <a href={`/evenements/${prochainEvent.Id}`} class="event-card">
+            <div class="event-type">{prochainEvent.type ?? 'Événement'}</div>
+            <div class="event-name">{prochainEvent.nom}</div>
+            {prochainEvent.date_debut && (
+              <time class="event-date" datetime={prochainEvent.date_debut}>
+                {formatDate(prochainEvent.date_debut)}
+              </time>
+            )}
+            {(prochainEvent.ville || prochainEvent.pays) && (
+              <div class="event-lieu">
+                {[prochainEvent.ville, prochainEvent.pays].filter(Boolean).join(', ')}
+              </div>
+            )}
+          </a>
+          <a href="/carte" class="widget-footer-link">Voir tous les événements →</a>
+        </div>
+      )}
+
+      <!-- CTA contribuer -->
+      <div class="widget widget-cta">
+        <p>Vous connaissez une ressource qui manque ?</p>
+        <a href="/soumettre" class="btn-primary btn-full">Soumettre une ressource</a>
+      </div>
+
+    </aside>
+  </div>
+
+</Layout>
+
+<style>
+  /* ── Hero ────────────────────────────────────────────────────────────────── */
+  .hero {
+    background: #faf8f4;
+    border-bottom: 0.5px solid #d4c9b0;
+    padding: 3.5rem 1.5rem 3rem;
+  }
+
+  .hero-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+
+  .hero-eyebrow {
+    margin: 0 0 0.75rem;
+    font-size: 0.75rem;
+    font-family: 'Georgia', serif;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #8b6914;
+  }
+
+  h1 {
+    margin: 0 0 1rem;
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-family: 'Georgia', serif;
+    font-weight: 700;
+    line-height: 1.15;
+    color: #1a1a1a;
+  }
+
+  .hero-sub {
+    margin: 0 0 1.75rem;
+    font-size: 1rem;
+    line-height: 1.7;
+    color: #4a4a4a;
+    max-width: 52ch;
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .hero-stats {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 1.25rem 1.5rem;
+    background: #fff;
+    border: 0.5px solid #d4c9b0;
+    border-radius: 6px;
+    align-self: flex-start;
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 2rem;
+  }
+
+  .stat:first-child { padding-left: 0; }
+  .stat:last-child  { padding-right: 0; }
+
+  .stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #1a1a1a;
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: #7a7a7a;
+    margin-top: 0.3rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .stat-sep {
+    width: 0.5px;
+    height: 2.5rem;
+    background: #d4c9b0;
+  }
+
+  /* ── Boutons ─────────────────────────────────────────────────────────────── */
+  .btn-primary {
+    display: inline-block;
+    padding: 0.6rem 1.25rem;
+    font-size: 0.875rem;
+    font-family: inherit;
+    text-decoration: none;
+    color: #fff;
+    background: #1a1a1a;
+    border: 0.5px solid #1a1a1a;
+    border-radius: 4px;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .btn-primary:hover {
+    background: #8b6914;
+    border-color: #8b6914;
+  }
+
+  .btn-full { display: block; text-align: center; }
+
+  .btn-secondary {
+    display: inline-block;
+    padding: 0.6rem 1.25rem;
+    font-size: 0.875rem;
+    text-decoration: none;
+    color: #1a1a1a;
+    background: transparent;
+    border: 0.5px solid #d4c9b0;
+    border-radius: 4px;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .btn-secondary:hover {
+    border-color: #8b6914;
+    background: #faf8f4;
+  }
+
+  /* ── Page body : feed + sidebar ──────────────────────────────────────────── */
+  .page-body {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem;
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 3rem;
+    align-items: start;
+  }
+
+  /* ── Feed ────────────────────────────────────────────────────────────────── */
+  .feed-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 0.5px solid #d4c9b0;
+  }
+
+  .feed-header h2 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1a1a1a;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .see-all {
+    font-size: 0.8rem;
+    color: #8b6914;
+    text-decoration: none;
+  }
+
+  .see-all:hover { text-decoration: underline; }
+
+  .feed-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .feed-item {
+    padding: 1.25rem 0;
+    border-bottom: 0.5px solid #eee8d8;
+  }
+
+  .feed-item:last-child { border-bottom: none; }
+
+  .feed-item-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.7rem;
+    border-radius: 3px;
+    letter-spacing: 0.03em;
+    font-family: sans-serif;
+    border: 0.5px solid transparent;
+  }
+
+  .badge-ressource { background: #f0ece0; color: #5a4a1a; border-color: #d4c9b0; }
+  .badge-tutoriel  { background: #e8f0e8; color: #1a4a2a; border-color: #b0d4b0; }
+  .badge-niveau    { background: #fff; color: #6a6a6a; border-color: #d4c9b0; }
+
+  .feed-date {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: #9a9a9a;
+    white-space: nowrap;
+  }
+
+  .feed-item-title {
+    display: block;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1a1a1a;
+    text-decoration: none;
+    line-height: 1.4;
+    margin-bottom: 0.35rem;
+  }
+
+  .feed-item-title:hover { color: #8b6914; }
+
+  .feed-item-desc {
+    margin: 0 0 0.6rem;
+    font-size: 0.85rem;
+    color: #5a5a5a;
+    line-height: 1.6;
+  }
+
+  .feed-item-foot {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .feed-score {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.78rem;
+    color: #8b6914;
+  }
+
+  .feed-score svg { width: 12px; height: 12px; }
+
+  .feed-ext-link {
+    font-size: 0.78rem;
+    color: #8b6914;
+    text-decoration: none;
+  }
+
+  .feed-ext-link:hover { text-decoration: underline; }
+
+  .feed-tag {
+    font-size: 0.75rem;
+    color: #6a6a6a;
+    background: #f5f5f0;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    border: 0.5px solid #e0e0d0;
+    text-transform: capitalize;
+  }
+
+  .empty {
+    padding: 2rem;
+    text-align: center;
+    color: #7a7a7a;
+    font-size: 0.9rem;
+    border: 0.5px dashed #d4c9b0;
+    border-radius: 6px;
+  }
+
+  .empty a { color: #8b6914; }
+
+  /* ── Sidebar ─────────────────────────────────────────────────────────────── */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .widget {
+    border: 0.5px solid #d4c9b0;
+    border-radius: 6px;
+    padding: 1.25rem;
+    background: #fff;
+  }
+
+  .widget-title {
+    margin: 0 0 1rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #7a7a7a;
+    padding-bottom: 0.6rem;
+    border-bottom: 0.5px solid #eee8d8;
+  }
+
+  /* Rubriques */
+  .rubrique-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .rubrique-link {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0.5rem;
+    font-size: 0.875rem;
+    color: #3a3a3a;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background 0.12s;
+  }
+
+  .rubrique-link:hover {
+    background: #f5f0e8;
+    color: #8b6914;
+  }
+
+  .rubrique-icon { font-size: 0.95rem; }
+
+  /* Tendances */
+  .tendances-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    counter-reset: tendance;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .tendances-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .tendance-rank {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #d4c9b0;
+    line-height: 1.3;
+    min-width: 1.25rem;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .tendance-link {
+    font-size: 0.85rem;
+    color: #1a1a1a;
+    text-decoration: none;
+    line-height: 1.4;
+  }
+
+  .tendance-link:hover { color: #8b6914; }
+
+  /* Événement */
+  .widget-event { background: #faf8f4; }
+
+  .event-card {
+    display: block;
+    text-decoration: none;
+    padding: 0.75rem;
+    border: 0.5px solid #d4c9b0;
+    border-radius: 4px;
+    background: #fff;
+    margin-bottom: 0.75rem;
+    transition: border-color 0.15s;
+  }
+
+  .event-card:hover { border-color: #8b6914; }
+
+  .event-type {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #8b6914;
+    margin-bottom: 0.35rem;
+    font-family: sans-serif;
+  }
+
+  .event-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 0.4rem;
+    line-height: 1.4;
+  }
+
+  .event-date {
+    display: block;
+    font-size: 0.8rem;
+    color: #5a5a5a;
+    margin-bottom: 0.2rem;
+  }
+
+  .event-lieu {
+    font-size: 0.78rem;
+    color: #9a9a9a;
+  }
+
+  .widget-footer-link {
+    display: block;
+    font-size: 0.8rem;
+    color: #8b6914;
+    text-decoration: none;
+    text-align: right;
+  }
+
+  .widget-footer-link:hover { text-decoration: underline; }
+
+  /* CTA */
+  .widget-cta {
+    background: #1a1a1a;
+    border-color: #1a1a1a;
+  }
+
+  .widget-cta p {
+    margin: 0 0 1rem;
+    font-size: 0.875rem;
+    color: #d4c9b0;
+    line-height: 1.5;
+  }
+
+  .widget-cta .btn-primary {
+    background: #8b6914;
+    border-color: #8b6914;
+  }
+
+  .widget-cta .btn-primary:hover {
+    background: #a07c20;
+    border-color: #a07c20;
+  }
+
+  /* ── Responsive ──────────────────────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    .page-body {
+      grid-template-columns: 1fr;
+    }
+
+    .sidebar {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    }
+  }
+
+  @media (max-width: 600px) {
+    .hero { padding: 2rem 1rem 1.75rem; }
+
+    .hero-stats {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .stat { padding: 0 1rem; }
+
+    .page-body { padding: 1.5rem 1rem; }
+
+    .sidebar { grid-template-columns: 1fr; }
+  }
+</style>

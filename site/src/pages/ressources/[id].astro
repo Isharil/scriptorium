@@ -1,0 +1,881 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getRessourceById, getRessources } from '../../lib/nocodb.js';
+
+export async function getStaticPaths() {
+  try {
+    const ressources = await getRessources();
+    return ressources.map(r => ({ params: { id: String(r.Id) } }));
+  } catch {
+    return [];
+  }
+}
+
+const { id } = Astro.params;
+const r = await getRessourceById(id).catch(() => null);
+
+if (!r) return Astro.redirect('/ressources');
+
+// ── Libellés ──────────────────────────────────────────────────────────────────
+const FIABILITE = {
+  source_primaire: { label: 'Source primaire', short: 'S1', cls: 'fiabilite-s1', tooltip: 'Document ou objet d\'époque original : manuscrit, fouille archéologique, objet conservé.' },
+  academique:      { label: 'Académique',       short: 'S2', cls: 'fiabilite-s2', tooltip: 'Publication scientifique ou universitaire avec références vérifiables.' },
+  communautaire:   { label: 'Communautaire',    short: 'S3', cls: 'fiabilite-s3', tooltip: 'Ressource produite ou validée par la communauté de reconstituteurs.' },
+  experience:      { label: 'Expérience',       short: 'S4', cls: 'fiabilite-s4', tooltip: 'Retour d\'expérience pratique, sans référence primaire directe.' },
+};
+
+const CERTITUDE = {
+  atteste:      { label: 'Attesté',       short: 'A', cls: 'cert-atteste',     tooltip: 'Attesté par des sources directes concordantes.' },
+  probable:     { label: 'Probable',      short: 'P', cls: 'cert-probable',    tooltip: 'Probable par déduction ou analogie avec des sources proches.' },
+  hypothese:    { label: 'Hypothèse',     short: 'H', cls: 'cert-hypothese',   tooltip: 'Hypothèse de travail, peu ou pas étayée par des sources directes.' },
+  experimental: { label: 'Expérimental',  short: 'E', cls: 'cert-experimental',tooltip: 'Reconstitution expérimentale, non attestée historiquement.' },
+};
+
+const TYPE_SOURCE = {
+  manuscrit: 'Manuscrit', archeologie: 'Archéologie', iconographie: 'Iconographie',
+  traite: 'Traité', article: 'Article', tutoriel: 'Tutoriel', video: 'Vidéo',
+  patron: 'Patron', autre: 'Autre',
+};
+
+const STATUT = {
+  soumis:      { label: 'Soumis',        cls: 'statut-soumis'  },
+  en_revision: { label: 'En révision',   cls: 'statut-revision'},
+  approuve:    { label: 'Approuvé',      cls: 'statut-approuve'},
+  conteste:    { label: 'Contesté',      cls: 'statut-conteste'},
+  archive:     { label: 'Archivé',       cls: 'statut-archive' },
+  refuse:      { label: 'Refusé',        cls: 'statut-refuse'  },
+};
+
+const CAT_LABELS = {
+  tenues: 'Tenues & textiles', armes: 'Armes', armures: 'Armures', objets: 'Objets',
+  metiers: 'Métiers', gastronomie: 'Gastronomie', musique: 'Musique',
+  architecture: 'Architecture', autre: 'Autre',
+};
+
+const PERIODE_LABELS = {
+  haut_MA: 'Haut Moyen Âge', Xe_XIe: 'Xe–XIe s.', XIIe_XIIIe: 'XIIe–XIIIe s.',
+  XIVe: 'XIVe s.', XVe: 'XVe s.', tout_MA: 'Tout le Moyen Âge',
+};
+
+const REGION_LABELS = {
+  france: 'France', angleterre: 'Angleterre', italie: 'Italie', empire: 'Empire germanique',
+  iberique: 'Péninsule ibérique', byzance: 'Byzance', scandinavie: 'Scandinavie', autres: 'Autres',
+};
+
+const LANGUE_LABELS = {
+  fr: 'Français', en: 'Anglais', de: 'Allemand', it: 'Italien',
+  es: 'Espagnol', la: 'Latin', autre: 'Autre',
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function parseMulti(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  return String(val).split(',').map(v => v.trim()).filter(Boolean);
+}
+
+function fmt(d) {
+  if (!d) return null;
+  return new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+const fiabilite = FIABILITE[r.niveau_fiabilite]      ?? null;
+const certitude = CERTITUDE[r.certitude_historique]  ?? null;
+const statut    = STATUT[r.statut]                   ?? null;
+const typeLabel = TYPE_SOURCE[r.type_source]         ?? null;
+
+const categories = parseMulti(r.categories).map(v => CAT_LABELS[v]    ?? v);
+const periodes   = parseMulti(r.periodes).map(v => PERIODE_LABELS[v]   ?? v);
+const regions    = parseMulti(r.regions).map(v => REGION_LABELS[v]     ?? v);
+const langues    = parseMulti(r.langues_source).map(v => LANGUE_LABELS[v] ?? v);
+const tags       = parseMulti(r.tags_libres ?? '');
+
+// URL Discourse (si forum configuré)
+const DISCOURSE_BASE = import.meta.env.DISCOURSE_URL ?? '';
+const discourseUrl   = DISCOURSE_BASE && r.discourse_thread_id
+  ? `${DISCOURSE_BASE}/t/${r.discourse_thread_id}`
+  : null;
+---
+
+<Layout
+  title={r.titre}
+  description={r.description?.slice(0, 155) ?? `Ressource médiévale : ${r.titre}`}
+>
+
+  <!-- ── Fil d'Ariane ──────────────────────────────────────────────────────── -->
+  <nav class="breadcrumb" aria-label="Fil d'Ariane">
+    <ol>
+      <li><a href="/">Accueil</a></li>
+      <li aria-hidden="true">›</li>
+      <li><a href="/ressources">Ressources</a></li>
+      <li aria-hidden="true">›</li>
+      <li aria-current="page">{r.titre}</li>
+    </ol>
+  </nav>
+
+  <div class="detail-page">
+
+    <!-- ── Colonne principale ────────────────────────────────────────────────── -->
+    <main class="detail-main">
+
+      <!-- En-tête ressource -->
+      <header class="detail-header">
+
+        <div class="detail-badges">
+          {fiabilite && (
+            <span class={`badge-fiabilite ${fiabilite.cls}`} data-tooltip={fiabilite.tooltip} role="img" aria-label={fiabilite.label}>
+              {fiabilite.short}
+            </span>
+          )}
+          {certitude && (
+            <span class={`badge-certitude ${certitude.cls}`} data-tooltip={certitude.tooltip} role="img" aria-label={`Certitude : ${certitude.label}`}>
+              {certitude.short}
+            </span>
+          )}
+          {typeLabel && <span class="badge-type">{typeLabel}</span>}
+          {statut && (
+            <span class={`badge-statut ${statut.cls}`}>{statut.label}</span>
+          )}
+          {r.acces_libre === false && (
+            <span class="badge-acces">Accès restreint</span>
+          )}
+          {r.en_contestation && (
+            <span class="badge-conteste" title="Cette ressource fait l'objet d'une contestation en cours.">
+              ⚠ Contestée
+            </span>
+          )}
+        </div>
+
+        <h1 class="detail-titre">{r.titre}</h1>
+
+        {r.auteur_source && (
+          <p class="detail-auteur">
+            Par <strong>{r.auteur_source}</strong>
+            {r.date_source && <span> · {r.date_source}</span>}
+            {r.cote_reference && <span> · <em>{r.cote_reference}</em></span>}
+          </p>
+        )}
+
+        <!-- Score + vues -->
+        <div class="detail-counters">
+          {r.score_communaute != null && (
+            <span class="counter">
+              <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25z"/></svg>
+              {r.score_communaute} point{Number(r.score_communaute) > 1 ? 's' : ''}
+            </span>
+          )}
+          {r.nb_vues != null && (
+            <span class="counter">
+              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41z" clip-rule="evenodd"/></svg>
+              {r.nb_vues} vue{Number(r.nb_vues) > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+      </header>
+
+      <!-- Description -->
+      {r.description && (
+        <section class="detail-section">
+          <h2 class="section-title">Description</h2>
+          <div class="detail-desc">{r.description}</div>
+        </section>
+      )}
+
+      <!-- Note du validateur -->
+      {r.note_validateur && (
+        <section class="detail-section">
+          <h2 class="section-title">Note du validateur</h2>
+          <blockquote class="validateur-note">
+            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>
+            <p>{r.note_validateur}</p>
+          </blockquote>
+        </section>
+      )}
+
+      <!-- Accès à la source -->
+      <section class="detail-section detail-source-section">
+        <h2 class="section-title">Accéder à la source</h2>
+        <div class="source-links">
+          {r.url_source && (
+            <a href={r.url_source} target="_blank" rel="noopener noreferrer" class="source-btn source-btn-primary">
+              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clip-rule="evenodd"/><path fill-rule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clip-rule="evenodd"/></svg>
+              Consulter la source
+            </a>
+          )}
+          {r.url_numerisation && r.url_numerisation !== r.url_source && (
+            <a href={r.url_numerisation} target="_blank" rel="noopener noreferrer" class="source-btn source-btn-secondary">
+              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M3 3.5A1.5 1.5 0 014.5 2h6.879a1.5 1.5 0 011.06.44l4.122 4.12A1.5 1.5 0 0117 7.622V16.5a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 013 16.5v-13z"/></svg>
+              Numérisation
+            </a>
+          )}
+        </div>
+      </section>
+
+      <!-- Lien Discourse -->
+      {discourseUrl && (
+        <section class="detail-section">
+          <h2 class="section-title">Discussion sur le forum</h2>
+          <a href={discourseUrl} target="_blank" rel="noopener noreferrer" class="discourse-link">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.103 0C18.666 0 24 5.272 24 11.775c0 6.505-5.334 11.776-11.897 11.776-1.605 0-3.132-.31-4.526-.868l-5.38 1.316 1.318-5.304C1.894 17.038 0 14.56 0 11.775 0 5.272 5.334 0 12.103 0z"/></svg>
+            Voir la discussion Discourse
+            <span class="discourse-tid">#{r.discourse_thread_id}</span>
+          </a>
+        </section>
+      )}
+
+      {!discourseUrl && r.discourse_thread_id && (
+        <section class="detail-section">
+          <h2 class="section-title">Discussion</h2>
+          <p class="discourse-placeholder">
+            Fil Discourse n°<strong>{r.discourse_thread_id}</strong>
+            — configurez <code>DISCOURSE_URL</code> dans <code>.env</code> pour activer le lien.
+          </p>
+        </section>
+      )}
+
+      <!-- Tags libres -->
+      {tags.length > 0 && (
+        <section class="detail-section">
+          <h2 class="section-title">Tags</h2>
+          <div class="tags-list">
+            {tags.map(t => (
+              <a href={`/ressources?q=${encodeURIComponent(t)}`} class="tag">{t}</a>
+            ))}
+          </div>
+        </section>
+      )}
+
+    </main>
+
+    <!-- ── Sidebar droite ────────────────────────────────────────────────────── -->
+    <aside class="detail-sidebar">
+
+      <!-- Fiche identité -->
+      <div class="widget">
+        <div class="widget-title">Fiche de la ressource</div>
+
+        <dl class="meta-dl">
+
+          {fiabilite && (
+            <>
+              <dt>Niveau de fiabilité</dt>
+              <dd>
+                <span class={`badge-fiabilite ${fiabilite.cls}`} data-tooltip={fiabilite.tooltip} role="img" aria-label={fiabilite.label}>
+                  {fiabilite.short}
+                </span>
+                {fiabilite.label}
+              </dd>
+            </>
+          )}
+
+          {certitude && (
+            <>
+              <dt>Certitude historique</dt>
+              <dd>
+                <span class={`badge-certitude ${certitude.cls}`} data-tooltip={certitude.tooltip} role="img" aria-label={certitude.label}>
+                  {certitude.short}
+                </span>
+                {certitude.label}
+              </dd>
+            </>
+          )}
+
+          {typeLabel && (
+            <>
+              <dt>Type de source</dt>
+              <dd>{typeLabel}</dd>
+            </>
+          )}
+
+          {categories.length > 0 && (
+            <>
+              <dt>Catégorie{categories.length > 1 ? 's' : ''}</dt>
+              <dd class="dd-multi">{categories.join(' · ')}</dd>
+            </>
+          )}
+
+          {periodes.length > 0 && (
+            <>
+              <dt>Période{periodes.length > 1 ? 's' : ''}</dt>
+              <dd class="dd-multi">{periodes.join(' · ')}</dd>
+            </>
+          )}
+
+          {regions.length > 0 && (
+            <>
+              <dt>Région{regions.length > 1 ? 's' : ''}</dt>
+              <dd class="dd-multi">{regions.join(' · ')}</dd>
+            </>
+          )}
+
+          {langues.length > 0 && (
+            <>
+              <dt>Langue{langues.length > 1 ? 's' : ''}</dt>
+              <dd>{langues.join(', ')}</dd>
+            </>
+          )}
+
+          {r.auteur_source && (
+            <>
+              <dt>Auteur</dt>
+              <dd>{r.auteur_source}</dd>
+            </>
+          )}
+
+          {r.date_source && (
+            <>
+              <dt>Date de la source</dt>
+              <dd>{r.date_source}</dd>
+            </>
+          )}
+
+          {r.cote_reference && (
+            <>
+              <dt>Cote / Référence</dt>
+              <dd>{r.cote_reference}</dd>
+            </>
+          )}
+
+          {r.acces_libre != null && (
+            <>
+              <dt>Accès</dt>
+              <dd>{r.acces_libre !== false ? 'Libre et gratuit' : 'Restreint ou payant'}</dd>
+            </>
+          )}
+
+        </dl>
+      </div>
+
+      <!-- Dates -->
+      <div class="widget">
+        <div class="widget-title">Historique</div>
+        <dl class="meta-dl">
+          {r.date_soumission && (
+            <>
+              <dt>Soumise le</dt>
+              <dd><time datetime={r.date_soumission}>{fmt(r.date_soumission)}</time></dd>
+            </>
+          )}
+          {r.date_validation && (
+            <>
+              <dt>Validée le</dt>
+              <dd><time datetime={r.date_validation}>{fmt(r.date_validation)}</time></dd>
+            </>
+          )}
+          {r.date_revision && (
+            <>
+              <dt>Révisée le</dt>
+              <dd><time datetime={r.date_revision}>{fmt(r.date_revision)}</time></dd>
+            </>
+          )}
+        </dl>
+      </div>
+
+      <!-- Actions -->
+      <div class="widget widget-actions">
+        <a href={`/voter?ressource=${r.Id}`} class="action-btn">
+          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25z"/></svg>
+          Voter pour cette ressource
+        </a>
+        <a href={`/contester?ressource=${r.Id}`} class="action-btn action-btn-light">
+          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+          Contester
+        </a>
+      </div>
+
+      <!-- Retour -->
+      <a href="/ressources" class="back-link">← Retour aux ressources</a>
+
+    </aside>
+  </div>
+
+</Layout>
+
+<style>
+  /* ── Fil d'Ariane ────────────────────────────────────────────────────────── */
+  .breadcrumb {
+    background: #faf8f4;
+    border-bottom: 0.5px solid #d4c9b0;
+    padding: 0.6rem 1.5rem;
+  }
+
+  .breadcrumb ol {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    list-style: none;
+    padding: 0;
+    flex-wrap: wrap;
+  }
+
+  .breadcrumb a {
+    font-size: 0.78rem;
+    color: #8b6914;
+    text-decoration: none;
+  }
+
+  .breadcrumb a:hover { text-decoration: underline; }
+
+  .breadcrumb [aria-hidden] { color: #ccc; font-size: 0.8rem; }
+
+  .breadcrumb [aria-current] {
+    font-size: 0.78rem;
+    color: #5a5a5a;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 30ch;
+  }
+
+  /* ── Layout 2 colonnes ───────────────────────────────────────────────────── */
+  .detail-page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem;
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 3rem;
+    align-items: start;
+  }
+
+  /* ── En-tête ─────────────────────────────────────────────────────────────── */
+  .detail-header {
+    margin-bottom: 2.5rem;
+    padding-bottom: 2rem;
+    border-bottom: 0.5px solid #eee8d8;
+  }
+
+  .detail-badges {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+  }
+
+  /* ── Badges fiabilité ────────────────────────────────────────────────────── */
+  .badge-fiabilite {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: 700;
+    font-family: sans-serif;
+    cursor: help;
+    border: 1.5px solid transparent;
+    flex-shrink: 0;
+  }
+
+  .fiabilite-s1 { background: #1a4a2a; color: #fff; border-color: #1a4a2a; }
+  .fiabilite-s2 { background: #2a4a8b; color: #fff; border-color: #2a4a8b; }
+  .fiabilite-s3 { background: #8b6914; color: #fff; border-color: #8b6914; }
+  .fiabilite-s4 { background: #8b3a1a; color: #fff; border-color: #8b3a1a; }
+
+  /* ── Badges certitude ────────────────────────────────────────────────────── */
+  .badge-certitude {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px; height: 26px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    font-family: sans-serif;
+    cursor: help;
+    border: 0.5px solid transparent;
+    flex-shrink: 0;
+  }
+
+  .cert-atteste     { background: #e8f5e8; color: #1a4a2a; border-color: #b0d4b0; }
+  .cert-probable    { background: #e8eef5; color: #1a2a5a; border-color: #b0bdd4; }
+  .cert-hypothese   { background: #f5f0e0; color: #5a4a10; border-color: #d4c9a0; }
+  .cert-experimental{ background: #f5e8e8; color: #5a1a1a; border-color: #d4b0b0; }
+
+  /* ── Tooltip ─────────────────────────────────────────────────────────────── */
+  [data-tooltip] { position: relative; }
+
+  [data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: 240px;
+    padding: 0.55rem 0.75rem;
+    background: #1a1a1a;
+    color: #f5f0e8;
+    font-size: 0.72rem;
+    font-family: sans-serif;
+    font-weight: 400;
+    line-height: 1.5;
+    border-radius: 4px;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s, visibility 0.15s;
+    z-index: 200;
+    white-space: normal;
+    text-align: left;
+  }
+
+  [data-tooltip]::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 5px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #1a1a1a;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s, visibility 0.15s;
+    z-index: 200;
+  }
+
+  [data-tooltip]:hover::after,
+  [data-tooltip]:focus::after,
+  [data-tooltip]:hover::before,
+  [data-tooltip]:focus::before { opacity: 1; visibility: visible; }
+
+  /* ── Autres badges ───────────────────────────────────────────────────────── */
+  .badge-type, .badge-statut, .badge-acces, .badge-conteste {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.72rem;
+    font-family: sans-serif;
+    border-radius: 3px;
+    border: 0.5px solid transparent;
+  }
+
+  .badge-type    { background: #f5f0e8; color: #5a4a1a; border-color: #d4c9b0; }
+  .badge-acces   { background: #fff8e8; color: #7a5a00; border-color: #d4c090; }
+  .badge-conteste{ background: #fff0e0; color: #8b3a00; border-color: #d4a070; font-weight: 600; }
+
+  .statut-soumis   { background: #f0f0f0; color: #5a5a5a; border-color: #ccc; }
+  .statut-revision { background: #e8eef5; color: #1a2a5a; border-color: #b0bdd4; }
+  .statut-approuve { background: #e8f5e8; color: #1a4a2a; border-color: #b0d4b0; }
+  .statut-conteste { background: #fff0e0; color: #8b3a00; border-color: #d4a070; }
+  .statut-archive  { background: #f0f0f0; color: #6a6a6a; border-color: #ccc; font-style: italic; }
+  .statut-refuse   { background: #f5e8e8; color: #5a1a1a; border-color: #d4b0b0; }
+
+  /* ── Titre ───────────────────────────────────────────────────────────────── */
+  .detail-titre {
+    margin: 0 0 0.5rem;
+    font-size: clamp(1.5rem, 3vw, 2.25rem);
+    font-family: 'Georgia', serif;
+    font-weight: 700;
+    line-height: 1.25;
+    color: #1a1a1a;
+  }
+
+  .detail-auteur {
+    margin: 0 0 1rem;
+    font-size: 0.9rem;
+    color: #5a5a5a;
+    font-style: italic;
+  }
+
+  .detail-auteur strong { font-style: normal; color: #1a1a1a; }
+
+  .detail-counters {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+  }
+
+  .counter {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.82rem;
+    color: #8b6914;
+  }
+
+  .counter svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+  /* ── Sections ────────────────────────────────────────────────────────────── */
+  .detail-section {
+    margin-bottom: 2.25rem;
+    padding-bottom: 2rem;
+    border-bottom: 0.5px solid #eee8d8;
+  }
+
+  .detail-section:last-child { border-bottom: none; margin-bottom: 0; }
+
+  .section-title {
+    margin: 0 0 0.85rem;
+    font-size: 0.72rem;
+    font-family: sans-serif;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #7a7a7a;
+  }
+
+  .detail-desc {
+    font-size: 0.95rem;
+    line-height: 1.75;
+    color: #2a2a2a;
+    white-space: pre-wrap;
+  }
+
+  /* ── Note validateur ─────────────────────────────────────────────────────── */
+  .validateur-note {
+    margin: 0;
+    padding: 1rem 1.25rem;
+    background: #f0f7f0;
+    border-left: 3px solid #1a4a2a;
+    border-radius: 0 4px 4px 0;
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+  }
+
+  .validateur-note svg {
+    width: 18px;
+    height: 18px;
+    color: #1a4a2a;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+
+  .validateur-note p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.65;
+    color: #2a4a2a;
+    font-style: italic;
+  }
+
+  /* ── Boutons source ──────────────────────────────────────────────────────── */
+  .source-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .source-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.875rem;
+    font-family: inherit;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background 0.15s, border-color 0.15s;
+    border: 0.5px solid transparent;
+  }
+
+  .source-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+  .source-btn-primary {
+    background: #1a1a1a;
+    color: #fff;
+    border-color: #1a1a1a;
+  }
+
+  .source-btn-primary:hover { background: #8b6914; border-color: #8b6914; }
+
+  .source-btn-secondary {
+    background: #fff;
+    color: #1a1a1a;
+    border-color: #d4c9b0;
+  }
+
+  .source-btn-secondary:hover { border-color: #8b6914; background: #faf8f4; }
+
+  /* ── Discourse ───────────────────────────────────────────────────────────── */
+  .discourse-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.875rem;
+    font-family: inherit;
+    text-decoration: none;
+    background: #fff8f0;
+    color: #c77c38;
+    border: 0.5px solid #e8c89a;
+    border-radius: 4px;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .discourse-link:hover { background: #fff0e0; border-color: #c77c38; }
+  .discourse-link svg { width: 18px; height: 18px; flex-shrink: 0; }
+  .discourse-tid { font-size: 0.78rem; color: #a07040; margin-left: 0.25rem; }
+
+  .discourse-placeholder {
+    font-size: 0.85rem;
+    color: #7a7a7a;
+    font-style: italic;
+    margin: 0;
+  }
+
+  .discourse-placeholder code {
+    font-family: monospace;
+    background: #f5f0e8;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    color: #5a4a1a;
+  }
+
+  /* ── Tags ────────────────────────────────────────────────────────────────── */
+  .tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.75rem;
+    font-family: sans-serif;
+    background: #f5f5f0;
+    color: #5a5a5a;
+    border: 0.5px solid #e0e0d0;
+    border-radius: 3px;
+    text-decoration: none;
+    transition: border-color 0.12s, color 0.12s;
+  }
+
+  .tag:hover { border-color: #8b6914; color: #8b6914; }
+
+  /* ── Sidebar ─────────────────────────────────────────────────────────────── */
+  .detail-sidebar {
+    position: sticky;
+    top: 72px;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .widget {
+    border: 0.5px solid #d4c9b0;
+    border-radius: 6px;
+    padding: 1.1rem 1.25rem;
+    background: #fff;
+  }
+
+  .widget-title {
+    font-size: 0.68rem;
+    font-family: sans-serif;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #9a9a9a;
+    margin-bottom: 0.85rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 0.5px solid #eee8d8;
+  }
+
+  /* ── DL métadonnées ──────────────────────────────────────────────────────── */
+  .meta-dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 0.75rem;
+    row-gap: 0.55rem;
+    margin: 0;
+    font-size: 0.82rem;
+  }
+
+  .meta-dl dt {
+    color: #7a7a7a;
+    white-space: nowrap;
+  }
+
+  .meta-dl dd {
+    margin: 0;
+    color: #1a1a1a;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+
+  .dd-multi { line-height: 1.5; }
+
+  /* ── Actions ─────────────────────────────────────────────────────────────── */
+  .widget-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: #faf8f4;
+  }
+
+  .action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.55rem 1rem;
+    font-size: 0.82rem;
+    font-family: inherit;
+    text-decoration: none;
+    border-radius: 4px;
+    text-align: center;
+    transition: background 0.15s, border-color 0.15s;
+    border: 0.5px solid transparent;
+  }
+
+  .action-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+  .action-btn:not(.action-btn-light) {
+    background: #1a1a1a;
+    color: #fff;
+    border-color: #1a1a1a;
+  }
+
+  .action-btn:not(.action-btn-light):hover { background: #8b6914; border-color: #8b6914; }
+
+  .action-btn-light {
+    background: #fff;
+    color: #5a5a5a;
+    border-color: #d4c9b0;
+  }
+
+  .action-btn-light:hover { border-color: #8b3a1a; color: #8b3a1a; background: #fff8f5; }
+
+  /* ── Retour ──────────────────────────────────────────────────────────────── */
+  .back-link {
+    font-size: 0.8rem;
+    color: #8b6914;
+    text-decoration: none;
+    padding: 0.25rem 0;
+    display: inline-block;
+  }
+
+  .back-link:hover { text-decoration: underline; }
+
+  /* ── Responsive ──────────────────────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    .detail-page {
+      grid-template-columns: 1fr;
+    }
+
+    .detail-sidebar {
+      position: static;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    }
+
+    .back-link { grid-column: 1 / -1; }
+  }
+
+  @media (max-width: 600px) {
+    .detail-page { padding: 1.25rem 1rem; gap: 1.5rem; }
+    .detail-sidebar { grid-template-columns: 1fr; }
+    .meta-dl { grid-template-columns: 1fr; }
+    .meta-dl dt { color: #9a9a9a; font-size: 0.72rem; margin-bottom: -0.3rem; }
+  }
+</style>

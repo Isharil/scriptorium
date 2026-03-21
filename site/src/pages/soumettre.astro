@@ -1,0 +1,380 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+// Lire le type pré-sélectionné depuis l'URL
+const typePre = Astro.url.searchParams.get('type') ?? 'ressource';
+
+// Retour après soumission
+const success = Astro.url.searchParams.get('ok') === '1';
+const error   = Astro.url.searchParams.get('err');
+---
+
+<Layout title="Soumettre" description="Proposez une ressource, un tutoriel ou une boutique à la communauté Scriptorium.">
+
+  <div class="submit-page">
+
+    <div class="submit-header">
+      <h1>Soumettre une contribution</h1>
+      <p class="submit-desc">
+        Chaque soumission est examinée par la communauté avant d'être publiée.
+        Merci de fournir des informations précises et vérifiables.
+      </p>
+    </div>
+
+    <div class="submit-body">
+
+      <!-- Formulaire principal -->
+      <div class="submit-form-wrap">
+
+        {success && (
+          <div class="alert alert-success" role="alert">
+            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>
+            <div>
+              <strong>Soumission reçue !</strong>
+              <p>Votre contribution a été ajoutée à la file de validation. Merci !</p>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div class="alert alert-error" role="alert">
+            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+            <div>
+              <strong>Erreur</strong>
+              <p>{decodeURIComponent(error)}</p>
+            </div>
+          </div>
+        )}
+
+        <!-- Sélecteur de type -->
+        <div class="type-selector" role="group" aria-label="Type de contribution">
+          <button type="button" class:list={['type-btn', { 'type-btn-active': typePre === 'ressource' }]} data-type="ressource">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+            Ressource
+          </button>
+          <button type="button" class:list={['type-btn', { 'type-btn-active': typePre === 'tutoriel' }]} data-type="tutoriel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"/></svg>
+            Tutoriel
+          </button>
+          <button type="button" class:list={['type-btn', { 'type-btn-active': typePre === 'boutique' }]} data-type="boutique">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
+            Boutique
+          </button>
+        </div>
+
+        <!-- Formulaire : Ressource / Tutoriel (URL vers file IA) -->
+        <form id="form-ressource" class:list={['submit-form', { hidden: typePre === 'boutique' }]}
+              method="POST" action="/api/soumettre">
+
+          <input type="hidden" name="type" value="ressource" />
+
+          <div class="field">
+            <label for="url_soumise" class="field-label">
+              URL de la ressource <span class="required" aria-label="requis">*</span>
+            </label>
+            <input id="url_soumise" name="url_soumise" type="url" required
+                   placeholder="https://gallica.bnf.fr/…"
+                   class="field-input" />
+            <p class="field-help">Lien vers le manuscrit, l'article, la vidéo ou le patron.</p>
+          </div>
+
+          <div class="field">
+            <label for="niveau_propose" class="field-label">Niveau de fiabilité estimé</label>
+            <select id="niveau_propose" name="niveau_propose" class="field-select">
+              <option value="">— Choisir —</option>
+              <option value="source_primaire">Source primaire (manuscrit, objet d'époque…)</option>
+              <option value="academique">Académique (article, publication universitaire…)</option>
+              <option value="communautaire">Communautaire (forum, wiki de reconstitution…)</option>
+              <option value="experience">Expérience (retour de pratique personnelle)</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="tags_proposes" class="field-label">Tags / mots-clés</label>
+            <input id="tags_proposes" name="tags_proposes" type="text"
+                   placeholder="cotte de mailles, XIVe, maille rivée…"
+                   class="field-input" />
+            <p class="field-help">Séparés par des virgules. Aide la classification automatique.</p>
+          </div>
+
+          <div class="field">
+            <label for="commentaire" class="field-label">Commentaire (optionnel)</label>
+            <textarea id="commentaire" name="commentaire" rows="4" class="field-textarea"
+                      placeholder="Pourquoi soumettez-vous cette ressource ? Y a-t-il des points d'attention ?"></textarea>
+          </div>
+
+          <div class="field-row">
+            <div class="field" style="flex:1">
+              <label for="discourse_user" class="field-label">Nom d'utilisateur Discourse</label>
+              <input id="discourse_user" name="discourse_user" type="text"
+                     placeholder="votre_pseudo" class="field-input" />
+            </div>
+          </div>
+
+          <div class="submit-footer">
+            <p class="submit-note">
+              <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M15 8A7 7 0 110 8a7 7 0 0115 0zM9 5a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L9 8.586V5z" clip-rule="evenodd"/></svg>
+              Votre soumission sera analysée puis soumise à validation communautaire.
+            </p>
+            <button type="submit" class="btn-submit">Soumettre</button>
+          </div>
+        </form>
+
+        <!-- Formulaire : Boutique -->
+        <form id="form-boutique" class:list={['submit-form', { hidden: typePre !== 'boutique' }]}
+              method="POST" action="/api/soumettre">
+
+          <input type="hidden" name="type" value="boutique" />
+
+          <div class="field-row">
+            <div class="field" style="flex:1">
+              <label for="nom" class="field-label">Nom de la boutique <span class="required">*</span></label>
+              <input id="nom" name="nom" type="text" required placeholder="La Forge du Roi" class="field-input" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="url_site" class="field-label">Site web <span class="required">*</span></label>
+            <input id="url_site" name="url_site" type="url" required placeholder="https://…" class="field-input" />
+          </div>
+
+          <div class="field">
+            <label for="description_b" class="field-label">Description</label>
+            <textarea id="description_b" name="description" rows="3" class="field-textarea"
+                      placeholder="Que propose cette boutique ? Quelles sont ses spécialités ?"></textarea>
+          </div>
+
+          <div class="field-row">
+            <div class="field" style="flex:1">
+              <label for="pays" class="field-label">Pays</label>
+              <input id="pays" name="pays" type="text" placeholder="France" class="field-input" />
+            </div>
+            <div class="field" style="flex:1">
+              <label for="ville" class="field-label">Ville</label>
+              <input id="ville" name="ville" type="text" placeholder="Paris" class="field-input" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="type_boutique" class="field-label">Type</label>
+            <select id="type_boutique" name="type_boutique" class="field-select">
+              <option value="">— Choisir —</option>
+              <option value="boutique_en_ligne">Boutique en ligne uniquement</option>
+              <option value="atelier_physique">Atelier physique uniquement</option>
+              <option value="les_deux">En ligne + atelier physique</option>
+              <option value="marche_uniquement">Marchés médiévaux uniquement</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Spécialités</label>
+            <div class="checkboxes">
+              {['textiles','armes','armures','maroquinerie','bijoux','forge','mercerie','livres','autre'].map(s => (
+                <label class="checkbox-label">
+                  <input type="checkbox" name="specialites" value={s} />
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="toggle-label">
+              <input type="checkbox" name="livraison_europe" value="1" />
+              Livraison en Europe
+            </label>
+          </div>
+
+          <div class="field">
+            <label for="discourse_user_b" class="field-label">Nom d'utilisateur Discourse</label>
+            <input id="discourse_user_b" name="discourse_user" type="text" placeholder="votre_pseudo" class="field-input" />
+          </div>
+
+          <div class="submit-footer">
+            <p class="submit-note">
+              <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M15 8A7 7 0 110 8a7 7 0 0115 0zM9 5a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L9 8.586V5z" clip-rule="evenodd"/></svg>
+              La boutique sera vérifiée avant publication.
+            </p>
+            <button type="submit" class="btn-submit">Proposer la boutique</button>
+          </div>
+        </form>
+
+      </div>
+
+      <!-- Sidebar info -->
+      <aside class="submit-sidebar">
+        <div class="widget">
+          <div class="widget-title">Comment ça marche ?</div>
+          <ol class="how-list">
+            <li><span class="step">1</span> Vous soumettez l'URL ou les informations</li>
+            <li><span class="step">2</span> L'IA propose un résumé et des tags</li>
+            <li><span class="step">3</span> La communauté valide ou demande des corrections</li>
+            <li><span class="step">4</span> La ressource est publiée avec son niveau de fiabilité</li>
+          </ol>
+        </div>
+
+        <div class="widget">
+          <div class="widget-title">Niveaux de fiabilité</div>
+          <dl class="fiab-legend">
+            <div class="fiab-row">
+              <dt><span class="fi fi-s1">S1</span></dt>
+              <dd>Source primaire — manuscrit, objet d'époque, fouille</dd>
+            </div>
+            <div class="fiab-row">
+              <dt><span class="fi fi-s2">S2</span></dt>
+              <dd>Académique — article universitaire, publication scientifique</dd>
+            </div>
+            <div class="fiab-row">
+              <dt><span class="fi fi-s3">S3</span></dt>
+              <dd>Communautaire — wiki, forum de reconstitution validé</dd>
+            </div>
+            <div class="fiab-row">
+              <dt><span class="fi fi-s4">S4</span></dt>
+              <dd>Expérience — retour de pratique sans source directe</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="widget widget-charter">
+          <div class="widget-title">Charte de contribution</div>
+          <ul class="charter-list">
+            <li>Vérifiez que la ressource n'existe pas déjà</li>
+            <li>Préférez les sources en accès libre</li>
+            <li>Indiquez honnêtement le niveau de fiabilité</li>
+            <li>Ajoutez des tags précis pour faciliter la recherche</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    // Switcher de type
+    const typeBtns = document.querySelectorAll('.type-btn');
+    const formRessource = document.getElementById('form-ressource');
+    const formBoutique  = document.getElementById('form-boutique');
+
+    typeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        typeBtns.forEach(b => b.classList.remove('type-btn-active'));
+        btn.classList.add('type-btn-active');
+
+        const type = btn.dataset.type;
+        if (type === 'boutique') {
+          formRessource?.classList.add('hidden');
+          formBoutique?.classList.remove('hidden');
+        } else {
+          formRessource?.classList.remove('hidden');
+          formBoutique?.classList.add('hidden');
+          // Mettre à jour le champ caché
+          const hiddenType = formRessource?.querySelector('input[name="type"]');
+          if (hiddenType) hiddenType.value = type;
+        }
+
+        // Mettre à jour l'URL sans recharger
+        const url = new URL(window.location.href);
+        url.searchParams.set('type', type);
+        window.history.replaceState({}, '', url);
+      });
+    });
+  </script>
+
+</Layout>
+
+<style>
+  .submit-page { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+
+  .submit-header { margin-bottom: 2.5rem; padding-bottom: 2rem; border-bottom: 0.5px solid #d4c9b0; }
+  h1 { margin: 0 0 .5rem; font-size: 1.75rem; font-family: 'Georgia', serif; }
+  .submit-desc { margin: 0; font-size: .9rem; color: #5a5a5a; line-height: 1.65; max-width: 60ch; }
+
+  .submit-body { display: grid; grid-template-columns: 1fr 280px; gap: 3rem; align-items: start; }
+
+  /* Alertes */
+  .alert { display: flex; gap: .75rem; padding: 1rem 1.25rem; border-radius: 6px; margin-bottom: 1.5rem; font-size: .875rem; line-height: 1.55; }
+  .alert svg { width: 20px; height: 20px; flex-shrink: 0; margin-top: .1rem; }
+  .alert strong { display: block; margin-bottom: .2rem; }
+  .alert p { margin: 0; }
+  .alert-success { background: #e8f5e8; border: 0.5px solid #b0d4b0; color: #1a4a2a; }
+  .alert-error   { background: #f5e8e8; border: 0.5px solid #d4b0b0; color: #5a1a1a; }
+
+  /* Sélecteur de type */
+  .type-selector { display: flex; gap: .5rem; margin-bottom: 2rem; flex-wrap: wrap; }
+  .type-btn { display: flex; align-items: center; gap: .5rem; padding: .55rem 1rem; font-size: .85rem; font-family: inherit; border: 0.5px solid #d4c9b0; border-radius: 4px; background: #fff; color: #4a4a4a; cursor: pointer; transition: border-color .12s, background .12s; }
+  .type-btn svg { width: 18px; height: 18px; }
+  .type-btn:hover { border-color: #8b6914; }
+  .type-btn-active { border-color: #8b6914; background: #faf8f4; color: #1a1a1a; font-weight: 600; }
+
+  /* Formulaire */
+  .submit-form { display: flex; flex-direction: column; gap: 1.5rem; }
+  .submit-form.hidden { display: none; }
+
+  .field { display: flex; flex-direction: column; gap: .4rem; }
+  .field-row { display: flex; gap: 1rem; }
+  .field-label { font-size: .8rem; font-weight: 600; color: #3a3a3a; }
+  .required { color: #8b3a1a; }
+  .field-help { margin: 0; font-size: .75rem; color: #7a7a7a; line-height: 1.5; }
+
+  .field-input,
+  .field-select,
+  .field-textarea {
+    width: 100%;
+    padding: .55rem .75rem;
+    font-size: .875rem;
+    font-family: inherit;
+    border: 0.5px solid #d4c9b0;
+    border-radius: 4px;
+    background: #faf8f4;
+    color: #1a1a1a;
+    outline: none;
+    transition: border-color .15s, background .15s;
+  }
+
+  .field-input:focus,
+  .field-select:focus,
+  .field-textarea:focus { border-color: #8b6914; background: #fff; }
+
+  .field-input::placeholder,
+  .field-textarea::placeholder { color: #aaa; }
+
+  .field-textarea { resize: vertical; min-height: 100px; line-height: 1.6; }
+
+  .checkboxes { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .checkbox-label { display: flex; align-items: center; gap: .4rem; font-size: .82rem; color: #3a3a3a; cursor: pointer; padding: .25rem .6rem; border: 0.5px solid #d4c9b0; border-radius: 3px; transition: border-color .12s; }
+  .checkbox-label:has(input:checked) { border-color: #8b6914; background: #faf8f4; }
+  .toggle-label { display: flex; align-items: center; gap: .5rem; font-size: .875rem; color: #3a3a3a; cursor: pointer; }
+
+  .submit-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding-top: 1rem; border-top: 0.5px solid #eee8d8; }
+  .submit-note { display: flex; align-items: flex-start; gap: .4rem; margin: 0; font-size: .78rem; color: #7a7a7a; line-height: 1.5; max-width: 40ch; }
+  .submit-note svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: .1rem; }
+
+  .btn-submit { padding: .65rem 1.5rem; font-size: .875rem; font-family: inherit; color: #fff; background: #1a1a1a; border: 0.5px solid #1a1a1a; border-radius: 4px; cursor: pointer; transition: background .15s; white-space: nowrap; }
+  .btn-submit:hover { background: #8b6914; border-color: #8b6914; }
+
+  /* Sidebar */
+  .submit-sidebar { position: sticky; top: 72px; display: flex; flex-direction: column; gap: 1.25rem; }
+  .widget { border: 0.5px solid #d4c9b0; border-radius: 6px; padding: 1.1rem 1.25rem; background: #fff; }
+  .widget-title { font-size: .68rem; font-family: sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #9a9a9a; margin-bottom: .85rem; padding-bottom: .6rem; border-bottom: 0.5px solid #eee8d8; }
+
+  .how-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .75rem; }
+  .how-list li { display: flex; align-items: flex-start; gap: .6rem; font-size: .82rem; color: #3a3a3a; line-height: 1.5; }
+  .step { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: #8b6914; color: #fff; font-size: .65rem; font-weight: 700; font-family: sans-serif; flex-shrink: 0; margin-top: .05rem; }
+
+  .fiab-legend { margin: 0; }
+  .fiab-row { display: flex; align-items: flex-start; gap: .6rem; margin-bottom: .6rem; }
+  .fiab-row:last-child { margin-bottom: 0; }
+  .fiab-row dt { margin: 0; }
+  .fiab-row dd { margin: 0; font-size: .78rem; color: #5a5a5a; line-height: 1.4; }
+  .fi { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; font-size: .6rem; font-weight: 700; font-family: sans-serif; flex-shrink: 0; }
+  .fi-s1 { background: #1a4a2a; color: #fff; }
+  .fi-s2 { background: #2a4a8b; color: #fff; }
+  .fi-s3 { background: #8b6914; color: #fff; }
+  .fi-s4 { background: #8b3a1a; color: #fff; }
+
+  .widget-charter { background: #faf8f4; }
+  .charter-list { margin: 0; padding: 0 0 0 1rem; display: flex; flex-direction: column; gap: .4rem; }
+  .charter-list li { font-size: .8rem; color: #5a5a5a; line-height: 1.5; }
+
+  @media (max-width: 900px) { .submit-body { grid-template-columns: 1fr; } .submit-sidebar { position: static; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); } }
+  @media (max-width: 600px) { .submit-page { padding: 1.25rem 1rem; } .submit-sidebar { grid-template-columns: 1fr; } .field-row { flex-direction: column; } }
+</style>

@@ -1,0 +1,15 @@
+node_modules/
+site/node_modules/
+site/dist/
+site/.astro/
+site/.netlify/
+.env
+.env.local
+.env.production
+scriptorium_ressources.xlsx
+Noco-win-x64.exe
+noco.db
+noco.db-shm
+noco.db-wal
+.claude/
+site/.git.bak/

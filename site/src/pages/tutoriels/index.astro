@@ -1,0 +1,244 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getTutoriels } from '../../lib/nocodb.js';
+
+let tutoriels = [];
+try { tutoriels = await getTutoriels(); }
+catch (e) { console.warn('[tutoriels]', e.message); }
+
+const params   = Astro.url.searchParams;
+const qQ       = params.get('q')          ?? '';
+const qDomaine = params.get('domaine')    ?? '';
+const qDiff    = params.get('difficulte') ?? '';
+const qMedia   = params.get('media')      ?? '';
+const qSources = params.get('sources')    ?? '';
+
+function matchMulti(field, value) {
+  if (!value) return true;
+  if (!field)  return false;
+  return String(field).split(',').map(v => v.trim()).includes(value);
+}
+
+const filtres = tutoriels.filter(t => {
+  if (qDomaine && t.domaine !== qDomaine)                    return false;
+  if (qDiff    && t.difficulte !== qDiff)                    return false;
+  if (qMedia   && t.type_media !== qMedia)                   return false;
+  if (qSources && !t.sources_citees)                         return false;
+  if (qQ) {
+    const hay = `${t.titre} ${t.domaine} ${t.difficulte}`.toLowerCase();
+    if (!hay.includes(qQ.toLowerCase())) return false;
+  }
+  return true;
+});
+
+const hasFilters = qQ || qDomaine || qDiff || qMedia || qSources;
+
+function buildUrl(ov) {
+  const p = new URLSearchParams({
+    ...(qQ       ? { q: qQ }               : {}),
+    ...(qDomaine ? { domaine: qDomaine }   : {}),
+    ...(qDiff    ? { difficulte: qDiff }   : {}),
+    ...(qMedia   ? { media: qMedia }       : {}),
+    ...(qSources ? { sources: qSources }   : {}),
+    ...ov,
+  });
+  for (const [k, v] of [...p.entries()]) { if (!v) p.delete(k); }
+  const qs = p.toString();
+  return `/tutoriels${qs ? '?' + qs : ''}`;
+}
+
+const DOMAINES = [
+  { value: 'couture',      label: 'Couture'       },
+  { value: 'cotte_mailles',label: 'Cotte de mailles' },
+  { value: 'forge',        label: 'Forge'         },
+  { value: 'teinture',     label: 'Teinture'      },
+  { value: 'broderie',     label: 'Broderie'      },
+  { value: 'maroquinerie', label: 'Maroquinerie'  },
+  { value: 'menuiserie',   label: 'Menuiserie'    },
+  { value: 'autre',        label: 'Autre'         },
+];
+
+const DIFFICULTES = [
+  { value: 'debutant',      label: 'Débutant',     cls: 'diff-deb'  },
+  { value: 'intermediaire', label: 'Intermédiaire',cls: 'diff-inter' },
+  { value: 'avance',        label: 'Avancé',       cls: 'diff-av'   },
+  { value: 'expert',        label: 'Expert',       cls: 'diff-exp'  },
+];
+
+const MEDIAS = [
+  { value: 'video',       label: '▶ Vidéo'  },
+  { value: 'article',     label: '📝 Article' },
+  { value: 'pdf',         label: '📄 PDF'    },
+  { value: 'image_serie', label: '🖼 Images' },
+];
+
+function diffLabel(v) { return DIFFICULTES.find(d => d.value === v)?.label ?? v; }
+function diffCls(v)   { return DIFFICULTES.find(d => d.value === v)?.cls   ?? ''; }
+function mediaIcon(v) { return MEDIAS.find(m => m.value === v)?.label ?? v; }
+
+function fmt(d) {
+  if (!d) return '';
+  return new Date(d).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' });
+}
+---
+
+<Layout title="Tutoriels" description="Tutoriels de reconstitution médiévale : couture, forge, teinture, broderie…">
+
+  <div class="page-head">
+    <div class="page-head-inner">
+      <div>
+        <h1>Tutoriels</h1>
+        <p class="page-desc">{filtres.length} tutoriel{filtres.length !== 1 ? 's' : ''}{hasFilters ? ' trouvé·s' : ' approuvés'}</p>
+      </div>
+      <a href="/soumettre?type=tutoriel" class="btn-primary">+ Proposer un tutoriel</a>
+    </div>
+  </div>
+
+  <div class="page-body">
+
+    <!-- Filtres -->
+    <aside class="filtres">
+      <form method="get" action="/tutoriels">
+
+        <div class="filtre-group">
+          <label for="q" class="filtre-label">Recherche</label>
+          <div class="search-wrap">
+            <svg class="search-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd"/></svg>
+            <input id="q" type="search" name="q" value={qQ} placeholder="Titre, domaine…" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="filtre-group">
+          <label class="filtre-label">Domaine</label>
+          <div class="chip-group">
+            <a href={buildUrl({ domaine: '' })} class:list={['chip', { 'chip-active': !qDomaine }]}>Tous</a>
+            {DOMAINES.map(d => (
+              <a href={buildUrl({ domaine: d.value })} class:list={['chip', { 'chip-active': qDomaine === d.value }]}>{d.label}</a>
+            ))}
+          </div>
+        </div>
+
+        <div class="filtre-group">
+          <label class="filtre-label">Difficulté</label>
+          <div class="chip-group">
+            <a href={buildUrl({ difficulte: '' })} class:list={['chip', { 'chip-active': !qDiff }]}>Toutes</a>
+            {DIFFICULTES.map(d => (
+              <a href={buildUrl({ difficulte: d.value })} class:list={['chip', `chip-diff`, d.cls, { 'chip-active': qDiff === d.value }]}>{d.label}</a>
+            ))}
+          </div>
+        </div>
+
+        <div class="filtre-group">
+          <label class="filtre-label">Format</label>
+          <div class="chip-group">
+            <a href={buildUrl({ media: '' })} class:list={['chip', { 'chip-active': !qMedia }]}>Tous</a>
+            {MEDIAS.map(m => (
+              <a href={buildUrl({ media: m.value })} class:list={['chip', { 'chip-active': qMedia === m.value }]}>{m.label}</a>
+            ))}
+          </div>
+        </div>
+
+        <div class="filtre-group">
+          <label class="toggle-label">
+            <input type="checkbox" name="sources" value="1" checked={!!qSources} onchange="this.form.submit()" />
+            Sources historiques citées
+          </label>
+        </div>
+
+        {hasFilters && <a href="/tutoriels" class="btn-reset">Réinitialiser</a>}
+      </form>
+    </aside>
+
+    <!-- Liste -->
+    <section class="tutoriels-wrap">
+      <div class="sort-bar">
+        <span class="sort-count">{filtres.length} résultat{filtres.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {filtres.length === 0 ? (
+        <div class="empty-state"><p>Aucun tutoriel ne correspond à ces critères.</p><a href="/tutoriels" class="link-reset">Effacer les filtres</a></div>
+      ) : (
+        <ol class="tutoriels-list">
+          {filtres.map(t => (
+            <li class="tutoriel-item">
+              <div class="ti-meta">
+                {t.type_media && <span class="ti-media">{mediaIcon(t.type_media)}</span>}
+                {t.difficulte && <span class={`ti-diff ${diffCls(t.difficulte)}`}>{diffLabel(t.difficulte)}</span>}
+                {t.sources_citees && <span class="ti-sources" title="Sources historiques citées">📜 Sourcé</span>}
+                <time class="ti-date">{fmt(t.date_soumission)}</time>
+              </div>
+              <a href={`/tutoriels/${t.Id}`} class="ti-titre">{t.titre}</a>
+              {t.domaine && (
+                <div class="ti-domaine">{DOMAINES.find(d => d.value === t.domaine)?.label ?? t.domaine}</div>
+              )}
+              <div class="ti-footer">
+                <a href={t.url} target="_blank" rel="noopener noreferrer" class="ti-ext-link">
+                  Accéder au tutoriel ↗
+                </a>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  </div>
+</Layout>
+
+<style>
+  .page-head { background: #faf8f4; border-bottom: 0.5px solid #d4c9b0; padding: 2rem 1.5rem; }
+  .page-head-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+  h1 { margin: 0 0 .25rem; font-size: 1.75rem; font-family: 'Georgia', serif; }
+  .page-desc { margin: 0; font-size: .875rem; color: #7a7a7a; }
+  .btn-primary { display: inline-block; padding: .5rem 1rem; font-size: .8rem; font-family: inherit; text-decoration: none; color: #fff; background: #1a1a1a; border: 0.5px solid #1a1a1a; border-radius: 4px; transition: background .15s; white-space: nowrap; }
+  .btn-primary:hover { background: #8b6914; border-color: #8b6914; }
+
+  .page-body { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; display: grid; grid-template-columns: 220px 1fr; gap: 3rem; align-items: start; }
+
+  .filtres { position: sticky; top: 72px; display: flex; flex-direction: column; }
+  .filtre-group { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 1.25rem; }
+  .filtre-group:first-child { margin-top: 0; }
+  .filtre-label { font-size: .7rem; font-family: sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: #7a7a7a; }
+  .search-wrap { position: relative; }
+  .search-icon { position: absolute; left: .6rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: #9a9a9a; pointer-events: none; }
+  .search-wrap input { width: 100%; padding: .4rem .6rem .4rem 2rem; font-size: .8rem; font-family: inherit; border: 0.5px solid #d4c9b0; border-radius: 4px; background: #faf8f4; outline: none; }
+  .search-wrap input:focus { border-color: #8b6914; }
+  .chip-group { display: flex; flex-wrap: wrap; gap: .3rem; }
+  .chip { display: inline-block; padding: .18rem .5rem; font-size: .7rem; font-family: sans-serif; border: 0.5px solid #d4c9b0; border-radius: 3px; color: #4a4a4a; text-decoration: none; background: #fff; transition: border-color .12s, color .12s; }
+  .chip:hover { border-color: #8b6914; color: #8b6914; }
+  .chip-active { background: #8b6914 !important; border-color: #8b6914 !important; color: #fff !important; }
+  .diff-deb  { border-color: #b0d4b0; }
+  .diff-inter{ border-color: #b0bdd4; }
+  .diff-av   { border-color: #d4c9a0; }
+  .diff-exp  { border-color: #d4b0b0; }
+  .toggle-label { display: flex; align-items: center; gap: .5rem; font-size: .85rem; color: #3a3a3a; cursor: pointer; }
+  .btn-reset { display: block; padding: .4rem; font-size: .78rem; text-align: center; color: #8b3a1a; text-decoration: none; border: 0.5px dashed #d4b0b0; border-radius: 4px; background: #fff8f8; }
+
+  .sort-bar { display: flex; justify-content: flex-end; margin-bottom: 1rem; padding-bottom: .75rem; border-bottom: 0.5px solid #eee8d8; }
+  .sort-count { font-size: .78rem; color: #9a9a9a; }
+
+  .tutoriels-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .tutoriel-item { padding: 1.25rem 0; border-bottom: 0.5px solid #eee8d8; display: flex; flex-direction: column; gap: .5rem; }
+  .tutoriel-item:last-child { border-bottom: none; }
+
+  .ti-meta { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; }
+  .ti-media { font-size: .72rem; font-family: sans-serif; background: #f5f0e8; color: #5a4a1a; border: 0.5px solid #d4c9b0; border-radius: 3px; padding: .1rem .4rem; }
+  .ti-diff { font-size: .72rem; font-family: sans-serif; border-radius: 3px; padding: .1rem .4rem; border: 0.5px solid transparent; }
+  .diff-deb  { background: #e8f5e8; color: #1a4a2a; border-color: #b0d4b0; }
+  .diff-inter{ background: #e8eef5; color: #1a2a5a; border-color: #b0bdd4; }
+  .diff-av   { background: #f5f0e0; color: #5a4a10; border-color: #d4c9a0; }
+  .diff-exp  { background: #f5e8e8; color: #5a1a1a; border-color: #d4b0b0; }
+  .ti-sources { font-size: .72rem; font-family: sans-serif; }
+  .ti-date { margin-left: auto; font-size: .72rem; color: #9a9a9a; }
+  .ti-titre { font-size: 1.05rem; font-weight: 600; color: #1a1a1a; text-decoration: none; line-height: 1.4; }
+  .ti-titre:hover { color: #8b6914; }
+  .ti-domaine { font-size: .8rem; color: #6a6a6a; }
+  .ti-footer { display: flex; align-items: center; }
+  .ti-ext-link { font-size: .78rem; color: #8b6914; text-decoration: none; }
+  .ti-ext-link:hover { text-decoration: underline; }
+
+  .empty-state { display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 4rem 2rem; text-align: center; color: #7a7a7a; border: 0.5px dashed #d4c9b0; border-radius: 6px; }
+  .link-reset { font-size: .8rem; color: #8b6914; text-decoration: none; }
+
+  @media (max-width: 900px) { .page-body { grid-template-columns: 1fr; } .filtres { position: static; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }
+  @media (max-width: 600px) { .page-head { padding: 1.25rem 1rem; } .page-body { padding: 1.25rem 1rem; } .filtres { grid-template-columns: 1fr; } }
+</style>

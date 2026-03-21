@@ -1,0 +1,682 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import FicheRessource from '../../components/FicheRessource.astro';
+import { getRessources } from '../../lib/nocodb.js';
+
+let ressources = [];
+try {
+  ressources = await getRessources();
+} catch (e) {
+  console.warn('[ressources] NocoDB indisponible :', e.message);
+}
+
+// ── Lecture des filtres depuis l'URL ──────────────────────────────────────────
+const params   = Astro.url.searchParams;
+const qCat     = params.get('cat')      ?? '';
+const qPeriode = params.get('periode')  ?? '';
+const qRegion  = params.get('region')   ?? '';
+const qFiab    = params.get('fiabilite') ?? '';
+const qQ       = params.get('q')        ?? '';
+
+// ── Filtrage côté serveur ─────────────────────────────────────────────────────
+function matchMulti(field, value) {
+  if (!value) return true;
+  if (!field)  return false;
+  const vals = String(field).split(',').map(v => v.trim());
+  return vals.includes(value);
+}
+
+const filtrees = ressources.filter(r => {
+  if (qFiab    && r.niveau_fiabilite !== qFiab)        return false;
+  if (qCat     && !matchMulti(r.categories, qCat))     return false;
+  if (qPeriode && !matchMulti(r.periodes,   qPeriode)) return false;
+  if (qRegion  && !matchMulti(r.regions,    qRegion))  return false;
+  if (qQ) {
+    const hay = `${r.titre} ${r.description} ${r.auteur_source} ${r.tags_libres}`.toLowerCase();
+    if (!hay.includes(qQ.toLowerCase())) return false;
+  }
+  return true;
+});
+
+// ── Options des selects ───────────────────────────────────────────────────────
+const CATEGORIES = [
+  { value: 'tenues',        label: 'Tenues & textiles' },
+  { value: 'armes',         label: 'Armes' },
+  { value: 'armures',       label: 'Armures' },
+  { value: 'objets',        label: 'Objets' },
+  { value: 'metiers',       label: 'Métiers' },
+  { value: 'gastronomie',   label: 'Gastronomie' },
+  { value: 'musique',       label: 'Musique' },
+  { value: 'architecture',  label: 'Architecture' },
+  { value: 'autre',         label: 'Autre' },
+];
+
+const PERIODES = [
+  { value: 'haut_MA',    label: 'Haut Moyen Âge' },
+  { value: 'Xe_XIe',     label: 'Xe–XIe s.' },
+  { value: 'XIIe_XIIIe', label: 'XIIe–XIIIe s.' },
+  { value: 'XIVe',       label: 'XIVe s.' },
+  { value: 'XVe',        label: 'XVe s.' },
+  { value: 'tout_MA',    label: 'Tout le MA' },
+];
+
+const REGIONS = [
+  { value: 'france',       label: 'France' },
+  { value: 'angleterre',   label: 'Angleterre' },
+  { value: 'italie',       label: 'Italie' },
+  { value: 'empire',       label: 'Empire germanique' },
+  { value: 'iberique',     label: 'Péninsule ibérique' },
+  { value: 'byzance',      label: 'Byzance' },
+  { value: 'scandinavie',  label: 'Scandinavie' },
+  { value: 'autres',       label: 'Autres régions' },
+];
+
+const FIABILITE = [
+  { value: 'source_primaire', label: 'Source primaire' },
+  { value: 'academique',      label: 'Académique' },
+  { value: 'communautaire',   label: 'Communautaire' },
+  { value: 'experience',      label: 'Expérience' },
+];
+
+const hasFilters = qCat || qPeriode || qRegion || qFiab || qQ;
+
+// Construit une URL de filtre en écrasant seulement les clés fournies
+function buildUrl(overrides) {
+  const p = new URLSearchParams({
+    ...(qQ       ? { q:         qQ       } : {}),
+    ...(qCat     ? { cat:       qCat     } : {}),
+    ...(qPeriode ? { periode:   qPeriode } : {}),
+    ...(qRegion  ? { region:    qRegion  } : {}),
+    ...(qFiab    ? { fiabilite: qFiab    } : {}),
+    ...overrides,
+  });
+  // Supprimer les valeurs vides
+  for (const [k, v] of [...p.entries()]) { if (!v) p.delete(k); }
+  const qs = p.toString();
+  return `/ressources${qs ? '?' + qs : ''}`;
+}
+---
+
+<Layout
+  title="Ressources"
+  description="Parcourez les ressources médiévales vérifiées : manuscrits, patrons, articles, iconographies…"
+>
+
+  <div class="ressources-page">
+
+    <!-- ── En-tête de page ──────────────────────────────────────────────────── -->
+    <div class="page-head">
+      <div class="page-head-inner">
+        <div>
+          <h1>Ressources</h1>
+          <p class="page-desc">
+            {filtrees.length} ressource{filtrees.length !== 1 ? 's' : ''}
+            {hasFilters ? ' correspondant aux filtres' : ' approuvées par la communauté'}
+          </p>
+        </div>
+        <a href="/soumettre" class="btn-soumettre">+ Soumettre une ressource</a>
+      </div>
+    </div>
+
+    <div class="ressources-body">
+
+      <!-- ── Filtres ───────────────────────────────────────────────────────── -->
+      <aside class="filtres">
+        <form method="get" action="/ressources" id="filter-form">
+
+          <!-- Recherche textuelle -->
+          <div class="filtre-group">
+            <label for="q" class="filtre-label">Recherche</label>
+            <div class="search-wrap">
+              <svg class="search-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd"/>
+              </svg>
+              <input
+                id="q"
+                type="search"
+                name="q"
+                value={qQ}
+                placeholder="Titre, auteur, tags…"
+                autocomplete="off"
+              />
+            </div>
+          </div>
+
+          <!-- Catégorie -->
+          <div class="filtre-group">
+            <label class="filtre-label">Catégorie</label>
+            <div class="chip-group">
+              <a
+                href={buildUrl({ cat: '' })}
+                class:list={['chip', { 'chip-active': !qCat }]}
+              >Toutes</a>
+              {CATEGORIES.map(c => (
+                <a
+                  href={buildUrl({ cat: c.value })}
+                  class:list={['chip', { 'chip-active': qCat === c.value }]}
+                >
+                  {c.label}
+                </a>
+              ))}
+            </div>
+          </div>
+
+          <!-- Période -->
+          <div class="filtre-group">
+            <label for="periode" class="filtre-label">Période</label>
+            <select id="periode" name="periode" onchange="this.form.submit()">
+              <option value="">Toutes les périodes</option>
+              {PERIODES.map(p => (
+                <option value={p.value} selected={qPeriode === p.value}>{p.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <!-- Région -->
+          <div class="filtre-group">
+            <label for="region" class="filtre-label">Région</label>
+            <select id="region" name="region" onchange="this.form.submit()">
+              <option value="">Toutes les régions</option>
+              {REGIONS.map(r => (
+                <option value={r.value} selected={qRegion === r.value}>{r.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <!-- Niveau de fiabilité -->
+          <div class="filtre-group">
+            <label class="filtre-label">Niveau de fiabilité</label>
+            <div class="fiab-group">
+              <a
+                href={buildUrl({ fiabilite: '' })}
+                class:list={['fiab-chip', { 'fiab-active': !qFiab }]}
+              >Tous</a>
+              {FIABILITE.map(f => (
+                <a
+                  href={buildUrl({ fiabilite: f.value })}
+                  class:list={['fiab-chip', `fiab-${f.value}`, { 'fiab-active': qFiab === f.value }]}
+                >
+                  {f.label}
+                </a>
+              ))}
+            </div>
+          </div>
+
+          <!-- Bouton reset -->
+          {hasFilters && (
+            <a href="/ressources" class="btn-reset">Réinitialiser les filtres</a>
+          )}
+
+        </form>
+
+        <!-- Légende des badges -->
+        <div class="legende">
+          <div class="legende-title">Légende</div>
+          <div class="legende-row">
+            <span class="badge-fiabilite fiabilite-s1" title="">S1</span>
+            Source primaire
+          </div>
+          <div class="legende-row">
+            <span class="badge-fiabilite fiabilite-s2" title="">S2</span>
+            Académique
+          </div>
+          <div class="legende-row">
+            <span class="badge-fiabilite fiabilite-s3" title="">S3</span>
+            Communautaire
+          </div>
+          <div class="legende-row">
+            <span class="badge-fiabilite fiabilite-s4" title="">S4</span>
+            Expérience
+          </div>
+          <div class="legende-sep"></div>
+          <div class="legende-row">
+            <span class="badge-certitude cert-atteste">A</span>
+            Attesté
+          </div>
+          <div class="legende-row">
+            <span class="badge-certitude cert-probable">P</span>
+            Probable
+          </div>
+          <div class="legende-row">
+            <span class="badge-certitude cert-hypothese">H</span>
+            Hypothèse
+          </div>
+          <div class="legende-row">
+            <span class="badge-certitude cert-experimental">E</span>
+            Expérimental
+          </div>
+        </div>
+      </aside>
+
+      <!-- ── Grille des ressources ─────────────────────────────────────────── -->
+      <section class="ressources-grid-wrap" aria-live="polite" aria-label="Liste des ressources">
+
+        <!-- Barre de tri (décorative, tri réel côté serveur à brancher si besoin) -->
+        <div class="sort-bar">
+          <span class="sort-label">Trier par</span>
+          <a href={buildUrl({ sort: 'date' })}    class:list={['sort-opt', { 'sort-active': true }]}>Date</a>
+          <a href={buildUrl({ sort: 'score' })}   class="sort-opt">Score</a>
+          <a href={buildUrl({ sort: 'fiabilite' })} class="sort-opt">Fiabilité</a>
+          <span class="sort-count">{filtrees.length} résultat{filtrees.length !== 1 ? 's' : ''}</span>
+        </div>
+
+        {filtrees.length === 0 ? (
+          <div class="empty-state">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+              <circle cx="22" cy="22" r="16"/>
+              <path stroke-linecap="round" d="M34 34l8 8"/>
+              <path stroke-linecap="round" d="M22 16v6M22 28h.01"/>
+            </svg>
+            <p>Aucune ressource ne correspond à ces critères.</p>
+            <a href="/ressources" class="btn-reset-inline">Effacer les filtres</a>
+          </div>
+        ) : (
+          <ol class="ressources-grid">
+            {filtrees.map(r => (
+              <li>
+                <FicheRessource ressource={r} variant="card" />
+              </li>
+            ))}
+          </ol>
+        )}
+
+      </section>
+    </div>
+  </div>
+
+</Layout>
+
+<!-- Helpers côté serveur pour construire les URLs de filtre -->
+{/* eslint-disable-next-line no-unused-vars */}
+<script is:inline>
+  // Soumission auto du formulaire sur changement de select (JS progressif)
+  document.querySelectorAll('#filter-form select').forEach(sel => {
+    sel.addEventListener('change', () => sel.form.submit());
+  });
+
+  // Soumission sur Entrée dans le champ recherche
+  document.querySelector('#q')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') e.target.form.submit();
+  });
+</script>
+
+<style>
+  /* ── Page ────────────────────────────────────────────────────────────────── */
+  .ressources-page { min-height: 100vh; }
+
+  /* ── En-tête ─────────────────────────────────────────────────────────────── */
+  .page-head {
+    background: #faf8f4;
+    border-bottom: 0.5px solid #d4c9b0;
+    padding: 2rem 1.5rem;
+  }
+
+  .page-head-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  h1 {
+    margin: 0 0 0.25rem;
+    font-size: 1.75rem;
+    font-family: 'Georgia', serif;
+    color: #1a1a1a;
+  }
+
+  .page-desc {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #7a7a7a;
+  }
+
+  .btn-soumettre {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    font-family: inherit;
+    text-decoration: none;
+    color: #fff;
+    background: #1a1a1a;
+    border: 0.5px solid #1a1a1a;
+    border-radius: 4px;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .btn-soumettre:hover {
+    background: #8b6914;
+    border-color: #8b6914;
+  }
+
+  /* ── Body 2 colonnes ─────────────────────────────────────────────────────── */
+  .ressources-body {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 3rem;
+    align-items: start;
+  }
+
+  /* ── Filtres ─────────────────────────────────────────────────────────────── */
+  .filtres {
+    position: sticky;
+    top: 72px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .filtre-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-top: 1.25rem;
+  }
+
+  .filtre-group:first-child {
+    margin-top: 0;
+  }
+
+  .filtre-label {
+    font-size: 0.7rem;
+    font-family: sans-serif;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #7a7a7a;
+  }
+
+  /* Recherche */
+  .search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 0.6rem;
+    width: 14px;
+    height: 14px;
+    color: #9a9a9a;
+    pointer-events: none;
+  }
+
+  .search-wrap input {
+    width: 100%;
+    padding: 0.4rem 0.6rem 0.4rem 2rem;
+    font-size: 0.8rem;
+    font-family: inherit;
+    border: 0.5px solid #d4c9b0;
+    border-radius: 4px;
+    background: #faf8f4;
+    color: #1a1a1a;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .search-wrap input:focus { border-color: #8b6914; background: #fff; }
+  .search-wrap input::placeholder { color: #aaa; }
+
+  /* Chips catégorie */
+  .chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .chip {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.72rem;
+    font-family: sans-serif;
+    border: 0.5px solid #d4c9b0;
+    border-radius: 3px;
+    color: #4a4a4a;
+    text-decoration: none;
+    background: #fff;
+    transition: border-color 0.12s, background 0.12s, color 0.12s;
+  }
+
+  .chip:hover { border-color: #8b6914; color: #8b6914; }
+  .chip-active { background: #8b6914; border-color: #8b6914; color: #fff; }
+  .chip-active:hover { background: #a07c20; }
+
+  /* Selects */
+  select {
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.8rem;
+    font-family: inherit;
+    border: 0.5px solid #d4c9b0;
+    border-radius: 4px;
+    background: #faf8f4;
+    color: #1a1a1a;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%239a9a9a' d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.6rem center;
+    background-size: 14px;
+    padding-right: 2rem;
+  }
+
+  select:focus { border-color: #8b6914; }
+
+  /* Chips fiabilité */
+  .fiab-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .fiab-chip {
+    display: block;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.78rem;
+    text-decoration: none;
+    border: 0.5px solid #d4c9b0;
+    border-radius: 4px;
+    color: #4a4a4a;
+    background: #fff;
+    transition: border-color 0.12s, background 0.12s;
+  }
+
+  .fiab-chip:hover   { border-color: #8b6914; background: #faf8f4; }
+  .fiab-active       { background: #f5f0e8; border-color: #8b6914; color: #5a4a1a; font-weight: 600; }
+
+  /* Reset */
+  .btn-reset {
+    display: block;
+    padding: 0.4rem;
+    font-size: 0.78rem;
+    text-align: center;
+    color: #8b3a1a;
+    text-decoration: none;
+    border: 0.5px dashed #d4b0b0;
+    border-radius: 4px;
+    background: #fff8f8;
+  }
+
+  .btn-reset:hover { background: #f5e8e8; }
+
+  /* Légende */
+  .legende {
+    padding: 1rem;
+    border: 0.5px solid #d4c9b0;
+    border-radius: 6px;
+    background: #faf8f4;
+    font-size: 0.75rem;
+    color: #5a5a5a;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .legende-title {
+    font-size: 0.68rem;
+    font-family: sans-serif;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #9a9a9a;
+    margin-bottom: 0.15rem;
+  }
+
+  .legende-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .legende-sep {
+    height: 0.5px;
+    background: #d4c9b0;
+    margin: 0.15rem 0;
+  }
+
+  /* Import des styles badge depuis FicheRessource (dupliqués ici pour la légende) */
+  .badge-fiabilite {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    font-size: 0.6rem;
+    font-weight: 700;
+    font-family: sans-serif;
+    border: 1.5px solid transparent;
+    flex-shrink: 0;
+  }
+  .fiabilite-s1 { background: #1a4a2a; color: #fff; border-color: #1a4a2a; }
+  .fiabilite-s2 { background: #2a4a8b; color: #fff; border-color: #2a4a8b; }
+  .fiabilite-s3 { background: #8b6914; color: #fff; border-color: #8b6914; }
+  .fiabilite-s4 { background: #8b3a1a; color: #fff; border-color: #8b3a1a; }
+
+  .badge-certitude {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px; height: 20px;
+    border-radius: 3px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    font-family: sans-serif;
+    border: 0.5px solid transparent;
+    flex-shrink: 0;
+  }
+  .cert-atteste     { background: #e8f5e8; color: #1a4a2a; border-color: #b0d4b0; }
+  .cert-probable    { background: #e8eef5; color: #1a2a5a; border-color: #b0bdd4; }
+  .cert-hypothese   { background: #f5f0e0; color: #5a4a10; border-color: #d4c9a0; }
+  .cert-experimental{ background: #f5e8e8; color: #5a1a1a; border-color: #d4b0b0; }
+
+  /* ── Grille ──────────────────────────────────────────────────────────────── */
+  .ressources-grid-wrap { min-width: 0; }
+
+  .sort-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 0.5px solid #eee8d8;
+    flex-wrap: wrap;
+  }
+
+  .sort-label {
+    font-size: 0.72rem;
+    font-family: sans-serif;
+    color: #9a9a9a;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 0.25rem;
+  }
+
+  .sort-opt {
+    font-size: 0.78rem;
+    color: #5a5a5a;
+    text-decoration: none;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    border: 0.5px solid transparent;
+    transition: border-color 0.12s;
+  }
+
+  .sort-opt:hover  { border-color: #d4c9b0; }
+  .sort-active     { border-color: #d4c9b0; background: #faf8f4; color: #1a1a1a; font-weight: 600; }
+
+  .sort-count {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: #9a9a9a;
+    font-family: sans-serif;
+  }
+
+  .ressources-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+  }
+
+  /* État vide */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 4rem 2rem;
+    text-align: center;
+    color: #7a7a7a;
+    border: 0.5px dashed #d4c9b0;
+    border-radius: 6px;
+  }
+
+  .empty-state svg {
+    width: 48px;
+    height: 48px;
+    color: #d4c9b0;
+  }
+
+  .empty-state p { margin: 0; font-size: 0.9rem; }
+
+  .btn-reset-inline {
+    font-size: 0.8rem;
+    color: #8b6914;
+    text-decoration: none;
+  }
+
+  .btn-reset-inline:hover { text-decoration: underline; }
+
+  /* ── Responsive ──────────────────────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    .ressources-body {
+      grid-template-columns: 1fr;
+    }
+
+    .filtres {
+      position: static;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
+
+    .legende { display: none; }
+  }
+
+  @media (max-width: 600px) {
+    .page-head { padding: 1.25rem 1rem; }
+    .ressources-body { padding: 1.25rem 1rem; gap: 1.5rem; }
+    .ressources-grid { grid-template-columns: 1fr; }
+    .filtres { grid-template-columns: 1fr; }
+  }
+</style>
+

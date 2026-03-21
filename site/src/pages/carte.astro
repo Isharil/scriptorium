@@ -1,0 +1,238 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getBoutiquesAvecCoords, getEvenementsAvecCoords } from '../lib/nocodb.js';
+
+let boutiques = [], evenements = [];
+try {
+  [boutiques, evenements] = await Promise.all([
+    getBoutiquesAvecCoords(),
+    getEvenementsAvecCoords(),
+  ]);
+} catch (e) { console.warn('[carte]', e.message); }
+
+// Filtrer uniquement ceux avec des coordonnées
+const boutiquesGeo = boutiques.filter(b => b.latitude && b.longitude);
+const evenementsGeo = evenements.filter(e => e.latitude && e.longitude);
+
+const vue = Astro.url.searchParams.get('vue') ?? 'tout';
+
+// Serialiser pour le JS client
+const markersData = {
+  boutiques: boutiquesGeo.map(b => ({
+    id:    b.Id,
+    lat:   Number(b.latitude),
+    lng:   Number(b.longitude),
+    nom:   b.nom,
+    type:  b.type ?? '',
+    ville: b.ville ?? '',
+    url:   `/boutiques/${b.Id}`,
+    site:  b.url_site ?? '',
+    note:  b.note_moyenne ?? null,
+    livraison: b.livraison_europe ?? false,
+  })),
+  evenements: evenementsGeo.map(e => ({
+    id:         e.Id,
+    lat:        Number(e.latitude),
+    lng:        Number(e.longitude),
+    nom:        e.nom,
+    type:       e.type ?? '',
+    ville:      e.ville ?? '',
+    date_debut: e.date_debut ?? '',
+    url:        `/evenements/${e.Id}`,
+  })),
+};
+
+const TYPE_LABELS = {
+  boutique_en_ligne:'En ligne', atelier_physique:'Atelier', les_deux:'En ligne + atelier', marche_uniquement:'Marchés',
+};
+
+const EVT_TYPE_LABELS = {
+  marche:'Marché', stage:'Stage', tournoi:'Tournoi', conference:'Conférence', festival:'Festival',
+};
+---
+
+<Layout title="Carte" description="Carte interactive des boutiques et événements médiévaux en Europe.">
+
+  <div class="carte-page">
+
+    <!-- Barre de contrôle -->
+    <div class="carte-controls">
+      <div class="controls-inner">
+
+        <div class="layer-toggle">
+          <a href="/carte?vue=tout"      class:list={['layer-btn', { active: vue !== 'evenements' && vue !== 'boutiques' }]}>Tout</a>
+          <a href="/carte?vue=boutiques" class:list={['layer-btn', { active: vue === 'boutiques' }]}>
+            <span class="dot dot-boutique"></span>
+            Boutiques ({boutiquesGeo.length})
+          </a>
+          <a href="/carte?vue=evenements" class:list={['layer-btn', { active: vue === 'evenements' }]}>
+            <span class="dot dot-event"></span>
+            Événements ({evenementsGeo.length})
+          </a>
+        </div>
+
+        <div class="carte-legend">
+          <span class="legend-item"><span class="dot dot-boutique"></span>Boutique</span>
+          <span class="legend-item"><span class="dot dot-event"></span>Événement</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Carte Leaflet -->
+    <div id="map" class="map-container" aria-label="Carte des boutiques et événements médiévaux"></div>
+
+    <!-- Stats bas -->
+    <div class="carte-footer">
+      <span>{boutiquesGeo.length} boutique{boutiquesGeo.length !== 1 ? 's' : ''} géolocalisée{boutiquesGeo.length !== 1 ? 's' : ''}</span>
+      <span class="sep">·</span>
+      <span>{evenementsGeo.length} événement{evenementsGeo.length !== 1 ? 's' : ''} géolocalisé{evenementsGeo.length !== 1 ? 's' : ''}</span>
+      <span class="sep">·</span>
+      <a href="/boutiques">Voir toutes les boutiques →</a>
+    </div>
+  </div>
+
+  <!-- CSS Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <script define:vars={{ markersData, vue }}>
+    // ── Icônes SVG inline pour les marqueurs ──────────────────────────────────
+    const iconBoutique = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#8b6914" width="28" height="28"><path d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>`;
+
+    const iconEvent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#2a4a8b" width="28" height="28"><path fill-rule="evenodd" d="M6.75 2.25A.75.75 0 017.5 3v1.5h9V3A.75.75 0 0118 3v1.5h.75a3 3 0 013 3v11.25a3 3 0 01-3 3H5.25a3 3 0 01-3-3V7.5a3 3 0 013-3H6V3a.75.75 0 01.75-.75zm13.5 9a1.5 1.5 0 00-1.5-1.5H5.25a1.5 1.5 0 00-1.5 1.5v7.5a1.5 1.5 0 001.5 1.5h13.5a1.5 1.5 0 001.5-1.5v-7.5z" clip-rule="evenodd"/></svg>`;
+
+    function makeIcon(svg, cls) {
+      return L.divIcon({
+        html: `<div class="map-marker ${cls}">${svg}</div>`,
+        className: '',
+        iconSize: [36, 36],
+        iconAnchor: [18, 36],
+        popupAnchor: [0, -36],
+      });
+    }
+
+    function formatDate(d) {
+      if (!d) return '';
+      return new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    }
+
+    function etoiles(note) {
+      if (!note) return '';
+      const n = Math.round(Number(note));
+      return '★'.repeat(n) + '☆'.repeat(5 - n);
+    }
+
+    // ── Init Leaflet ──────────────────────────────────────────────────────────
+    import('https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.esm.js').then(L => {
+      window.L = L;
+
+      const map = L.map('map', {
+        center:          [46.5, 4.0],
+        zoom:            6,
+        scrollWheelZoom: true,
+      });
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 18,
+      }).addTo(map);
+
+      // ── Boutiques ─────────────────────────────────────────────────────────
+      const layerBoutiques = L.layerGroup();
+      if (vue !== 'evenements') {
+        markersData.boutiques.forEach(b => {
+          const popup = `
+            <div class="popup">
+              <div class="popup-type">Boutique</div>
+              <strong class="popup-nom">${b.nom}</strong>
+              ${b.ville ? `<div class="popup-lieu">${b.ville}</div>` : ''}
+              ${b.note  ? `<div class="popup-note">${etoiles(b.note)} ${Number(b.note).toFixed(1)}/5</div>` : ''}
+              <div class="popup-actions">
+                <a href="${b.url}" class="popup-link">Fiche</a>
+                ${b.site ? `<a href="${b.site}" target="_blank" rel="noopener" class="popup-link popup-link-ext">Site ↗</a>` : ''}
+              </div>
+            </div>`;
+          L.marker([b.lat, b.lng], { icon: makeIcon(iconBoutique, 'marker-boutique') })
+            .bindPopup(popup)
+            .addTo(layerBoutiques);
+        });
+        layerBoutiques.addTo(map);
+      }
+
+      // ── Événements ────────────────────────────────────────────────────────
+      const layerEvents = L.layerGroup();
+      if (vue !== 'boutiques') {
+        markersData.evenements.forEach(e => {
+          const popup = `
+            <div class="popup">
+              <div class="popup-type">${e.type || 'Événement'}</div>
+              <strong class="popup-nom">${e.nom}</strong>
+              ${e.ville      ? `<div class="popup-lieu">${e.ville}</div>` : ''}
+              ${e.date_debut ? `<div class="popup-date">${formatDate(e.date_debut)}</div>` : ''}
+              <div class="popup-actions">
+                <a href="${e.url}" class="popup-link">Voir</a>
+              </div>
+            </div>`;
+          L.marker([e.lat, e.lng], { icon: makeIcon(iconEvent, 'marker-event') })
+            .bindPopup(popup)
+            .addTo(layerEvents);
+        });
+        layerEvents.addTo(map);
+      }
+
+      // Ajuster la vue aux marqueurs si on a des données
+      const allMarkers = [
+        ...(vue !== 'evenements' ? markersData.boutiques  : []),
+        ...(vue !== 'boutiques'  ? markersData.evenements : []),
+      ];
+      if (allMarkers.length > 0) {
+        const bounds = L.latLngBounds(allMarkers.map(m => [m.lat, m.lng]));
+        map.fitBounds(bounds.pad(0.1));
+      }
+    });
+  </script>
+
+</Layout>
+
+<style>
+  .carte-page { display: flex; flex-direction: column; height: calc(100vh - 56px); }
+
+  /* Barre de contrôle */
+  .carte-controls { background: #fff; border-bottom: 0.5px solid #d4c9b0; padding: .6rem 1.5rem; flex-shrink: 0; }
+  .controls-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; }
+  .layer-toggle { display: flex; gap: .25rem; }
+  .layer-btn { display: flex; align-items: center; gap: .4rem; padding: .3rem .75rem; font-size: .8rem; font-family: inherit; text-decoration: none; color: #4a4a4a; border: 0.5px solid #d4c9b0; border-radius: 4px; background: #fff; transition: border-color .12s, background .12s; }
+  .layer-btn:hover { border-color: #8b6914; }
+  .layer-btn.active { background: #faf8f4; border-color: #8b6914; color: #1a1a1a; font-weight: 600; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .dot-boutique { background: #8b6914; }
+  .dot-event    { background: #2a4a8b; }
+  .carte-legend { display: flex; gap: 1rem; }
+  .legend-item { display: flex; align-items: center; gap: .4rem; font-size: .78rem; color: #5a5a5a; }
+
+  /* Carte */
+  .map-container { flex: 1; min-height: 400px; background: #f5f0e8; }
+
+  /* Footer */
+  .carte-footer { flex-shrink: 0; padding: .6rem 1.5rem; border-top: 0.5px solid #d4c9b0; background: #faf8f4; font-size: .78rem; color: #7a7a7a; display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+  .carte-footer a { color: #8b6914; text-decoration: none; margin-left: auto; }
+  .carte-footer a:hover { text-decoration: underline; }
+  .sep { color: #d4c9b0; }
+
+  /* Styles injectés dans les popups Leaflet */
+  :global(.map-marker) { display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 2px 4px rgba(0,0,0,.25)); cursor: pointer; transition: transform .1s; }
+  :global(.map-marker:hover) { transform: scale(1.15); }
+
+  :global(.popup) { font-family: 'Georgia', serif; min-width: 160px; }
+  :global(.popup-type) { font-size: .65rem; font-family: sans-serif; text-transform: uppercase; letter-spacing: .06em; color: #8b6914; margin-bottom: .2rem; }
+  :global(.popup-nom) { display: block; font-size: .9rem; color: #1a1a1a; margin-bottom: .2rem; }
+  :global(.popup-lieu) { font-size: .78rem; color: #6a6a6a; margin-bottom: .2rem; }
+  :global(.popup-date) { font-size: .78rem; color: #5a5a5a; margin-bottom: .2rem; }
+  :global(.popup-note) { font-size: .8rem; color: #8b6914; margin-bottom: .4rem; }
+  :global(.popup-actions) { display: flex; gap: .5rem; margin-top: .5rem; padding-top: .5rem; border-top: 0.5px solid #eee8d8; }
+  :global(.popup-link) { font-size: .75rem; font-family: sans-serif; color: #1a1a1a; text-decoration: none; padding: .2rem .5rem; border: 0.5px solid #d4c9b0; border-radius: 3px; transition: border-color .12s; }
+  :global(.popup-link:hover) { border-color: #8b6914; color: #8b6914; }
+  :global(.popup-link-ext) { color: #8b6914; border-color: #d4c9b0; }
+  :global(.leaflet-popup-content-wrapper) { border-radius: 6px !important; border: 0.5px solid #d4c9b0 !important; box-shadow: 0 4px 16px rgba(0,0,0,.1) !important; }
+
+  @media (max-width: 600px) { .carte-controls { padding: .5rem 1rem; } .carte-legend { display: none; } }
+</style>

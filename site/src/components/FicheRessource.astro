@@ -1,0 +1,443 @@
+---
+/**
+ * FicheRessource — carte d'affichage d'une ressource NocoDB
+ * Props : ressource (objet NocoDB), variant ('card' | 'row')
+ */
+const { ressource: r, variant = 'card' } = Astro.props;
+
+// ── Libellés ──────────────────────────────────────────────────────────────────
+const FIABILITE = {
+  source_primaire: {
+    label:   'Source primaire',
+    short:   'S1',
+    color:   'fiabilite-s1',
+    tooltip: "Document ou objet d'époque original : manuscrit, fouille archéologique, objet conservé.",
+  },
+  academique: {
+    label:   'Académique',
+    short:   'S2',
+    color:   'fiabilite-s2',
+    tooltip: 'Publication scientifique ou universitaire avec références vérifiables.',
+  },
+  communautaire: {
+    label:   'Communautaire',
+    short:   'S3',
+    color:   'fiabilite-s3',
+    tooltip: 'Ressource produite ou validée par la communauté de reconstituteurs.',
+  },
+  experience: {
+    label:   'Expérience',
+    short:   'S4',
+    color:   'fiabilite-s4',
+    tooltip: "Retour d'expérience pratique, sans référence primaire directe.",
+  },
+};
+
+const CERTITUDE = {
+  atteste: {
+    label:   'Attesté',
+    short:   'A',
+    color:   'cert-atteste',
+    tooltip: 'Attesté par des sources directes concordantes.',
+  },
+  probable: {
+    label:   'Probable',
+    short:   'P',
+    color:   'cert-probable',
+    tooltip: 'Probable par déduction ou analogie avec des sources proches.',
+  },
+  hypothese: {
+    label:   'Hypothèse',
+    short:   'H',
+    color:   'cert-hypothese',
+    tooltip: 'Hypothèse de travail, peu ou pas étayée par des sources directes.',
+  },
+  experimental: {
+    label:   'Expérimental',
+    short:   'E',
+    color:   'cert-experimental',
+    tooltip: 'Reconstitution expérimentale, non attestée historiquement.',
+  },
+};
+
+const TYPE_SOURCE = {
+  manuscrit:    'Manuscrit',
+  archeologie:  'Archéologie',
+  iconographie: 'Iconographie',
+  traite:       'Traité',
+  article:      'Article',
+  tutoriel:     'Tutoriel',
+  video:        'Vidéo',
+  patron:       'Patron',
+  autre:        'Autre',
+};
+
+const PERIODES = {
+  haut_MA:    'Haut MA',
+  Xe_XIe:     'Xe–XIe s.',
+  XIIe_XIIIe: 'XIIe–XIIIe s.',
+  XIVe:       'XIVe s.',
+  XVe:        'XVe s.',
+  tout_MA:    'Tout MA',
+};
+
+function formatDate(d) {
+  if (!d) return null;
+  return new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+const fiabilite  = FIABILITE[r.niveau_fiabilite]  ?? null;
+const certitude  = CERTITUDE[r.certitude_historique] ?? null;
+const typeLabel  = TYPE_SOURCE[r.type_source] ?? null;
+
+// Catégories / périodes / régions (multi-select → tableau)
+function parseMulti(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  return String(val).split(',').map(v => v.trim()).filter(Boolean);
+}
+
+const periodes = parseMulti(r.periodes)
+  .map(p => PERIODES[p] ?? p)
+  .slice(0, 2);
+---
+
+<article class={`fiche fiche--${variant}`} data-id={r.Id}>
+
+  <!-- En-tête : badges de fiabilité + type source -->
+  <header class="fiche-header">
+    <div class="fiche-badges">
+
+      {fiabilite && (
+        <span
+          class={`badge-fiabilite ${fiabilite.color}`}
+          aria-label={fiabilite.label}
+          data-tooltip={fiabilite.tooltip}
+          role="img"
+        >
+          {fiabilite.short}
+        </span>
+      )}
+
+      {certitude && (
+        <span
+          class={`badge-certitude ${certitude.color}`}
+          aria-label={`Certitude : ${certitude.label}`}
+          data-tooltip={certitude.tooltip}
+          role="img"
+        >
+          {certitude.short}
+        </span>
+      )}
+
+      {typeLabel && <span class="badge-type">{typeLabel}</span>}
+    </div>
+
+    {r.score_communaute != null && Number(r.score_communaute) > 0 && (
+      <span class="fiche-score" aria-label={`Score communauté : ${r.score_communaute}`}>
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M8 .25a.75.75 0 01.673.418l1.882 3.815 4.21.612a.75.75 0 01.416 1.279l-3.046 2.97.719 4.192a.75.75 0 01-1.088.791L8 12.347l-3.766 1.98a.75.75 0 01-1.088-.79l.72-4.194L.818 6.374a.75.75 0 01.416-1.28l4.21-.611L7.327.668A.75.75 0 018 .25z"/>
+        </svg>
+        {r.score_communaute}
+      </span>
+    )}
+  </header>
+
+  <!-- Titre -->
+  <h2 class="fiche-titre">
+    <a href={`/ressources/${r.Id}`}>{r.titre}</a>
+  </h2>
+
+  <!-- Description -->
+  {r.description && (
+    <p class="fiche-desc">
+      {r.description.length > 160
+        ? r.description.slice(0, 160) + '…'
+        : r.description}
+    </p>
+  )}
+
+  <!-- Métadonnées : périodes + auteur + date -->
+  <div class="fiche-meta">
+    {periodes.map(p => <span class="meta-tag">{p}</span>)}
+    {r.auteur_source && <span class="meta-sep">·</span>}
+    {r.auteur_source && <span class="meta-auteur">{r.auteur_source}</span>}
+    {r.date_source && <span class="meta-sep">·</span>}
+    {r.date_source && <span class="meta-date-src">{r.date_source}</span>}
+  </div>
+
+  <!-- Pied : lien source + date soumission -->
+  <footer class="fiche-footer">
+    {r.url_source && (
+      <a
+        href={r.url_source}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="fiche-source-link"
+        aria-label={`Source externe : ${r.titre}`}
+      >
+        Accéder à la source ↗
+      </a>
+    )}
+    {r.acces_libre === false && (
+      <span class="fiche-payant" title="Accès payant ou restreint">Accès restreint</span>
+    )}
+    <time class="fiche-date" datetime={r.date_validation ?? r.date_soumission ?? ''}>
+      {formatDate(r.date_validation ?? r.date_soumission)}
+    </time>
+  </footer>
+
+</article>
+
+<style>
+  /* ── Fiche de base ───────────────────────────────────────────────────────── */
+  .fiche {
+    background: #fff;
+    border: 0.5px solid #d4c9b0;
+    border-radius: 6px;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .fiche:hover {
+    border-color: #8b6914;
+    box-shadow: 0 2px 12px rgba(139,105,20,0.08);
+  }
+
+  /* ── Variante row ────────────────────────────────────────────────────────── */
+  .fiche--row {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-bottom: 0.5px solid #eee8d8;
+    padding: 1rem 0;
+    box-shadow: none !important;
+  }
+
+  .fiche--row:hover { border-color: #eee8d8; }
+  .fiche--row:hover .fiche-titre a { color: #8b6914; }
+
+  /* ── Header ──────────────────────────────────────────────────────────────── */
+  .fiche-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .fiche-badges {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+
+  /* ── Badge fiabilité ─────────────────────────────────────────────────────── */
+  .badge-fiabilite {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    font-size: 0.65rem;
+    font-weight: 700;
+    font-family: sans-serif;
+    cursor: help;
+    border: 1.5px solid transparent;
+    flex-shrink: 0;
+  }
+
+  .fiabilite-s1 { background: #1a4a2a; color: #fff; border-color: #1a4a2a; }
+  .fiabilite-s2 { background: #2a4a8b; color: #fff; border-color: #2a4a8b; }
+  .fiabilite-s3 { background: #8b6914; color: #fff; border-color: #8b6914; }
+  .fiabilite-s4 { background: #8b3a1a; color: #fff; border-color: #8b3a1a; }
+
+  /* ── Badge certitude ─────────────────────────────────────────────────────── */
+  .badge-certitude {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 3px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    font-family: sans-serif;
+    cursor: help;
+    border: 0.5px solid transparent;
+    flex-shrink: 0;
+  }
+
+  .cert-atteste    { background: #e8f5e8; color: #1a4a2a; border-color: #b0d4b0; }
+  .cert-probable   { background: #e8eef5; color: #1a2a5a; border-color: #b0bdd4; }
+  .cert-hypothese  { background: #f5f0e0; color: #5a4a10; border-color: #d4c9a0; }
+  .cert-experimental{ background: #f5e8e8; color: #5a1a1a; border-color: #d4b0b0; }
+
+  /* ── Tooltip générique via data-tooltip ──────────────────────────────────── */
+  [data-tooltip] {
+    position: relative;
+  }
+
+  [data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: 220px;
+    padding: 0.5rem 0.7rem;
+    background: #1a1a1a;
+    color: #f5f0e8;
+    font-size: 0.72rem;
+    font-family: sans-serif;
+    font-weight: 400;
+    line-height: 1.5;
+    border-radius: 4px;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s, visibility 0.15s;
+    z-index: 200;
+    white-space: normal;
+    text-align: left;
+  }
+
+  [data-tooltip]::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 3px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #1a1a1a;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s, visibility 0.15s;
+    z-index: 200;
+  }
+
+  [data-tooltip]:hover::after,
+  [data-tooltip]:focus::after,
+  [data-tooltip]:hover::before,
+  [data-tooltip]:focus::before {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* ── Badge type source ───────────────────────────────────────────────────── */
+  .badge-type {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.68rem;
+    font-family: sans-serif;
+    background: #f5f0e8;
+    color: #5a4a1a;
+    border: 0.5px solid #d4c9b0;
+    border-radius: 3px;
+  }
+
+  /* ── Score ───────────────────────────────────────────────────────────────── */
+  .fiche-score {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.78rem;
+    color: #8b6914;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
+  .fiche-score svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+  /* ── Titre ───────────────────────────────────────────────────────────────── */
+  .fiche-titre {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  .fiche-titre a {
+    color: #1a1a1a;
+    text-decoration: none;
+    transition: color 0.12s;
+  }
+
+  .fiche-titre a:hover { color: #8b6914; }
+
+  /* ── Description ─────────────────────────────────────────────────────────── */
+  .fiche-desc {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #5a5a5a;
+    line-height: 1.6;
+  }
+
+  /* ── Méta ────────────────────────────────────────────────────────────────── */
+  .fiche-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.15rem;
+  }
+
+  .meta-tag {
+    font-size: 0.72rem;
+    font-family: sans-serif;
+    background: #f5f5f0;
+    color: #6a6a6a;
+    border: 0.5px solid #e0e0d0;
+    border-radius: 3px;
+    padding: 0.1rem 0.4rem;
+  }
+
+  .meta-sep   { color: #ccc; font-size: 0.8rem; }
+  .meta-auteur,
+  .meta-date-src { font-size: 0.78rem; color: #7a7a7a; font-style: italic; }
+
+  /* ── Footer ──────────────────────────────────────────────────────────────── */
+  .fiche-footer {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: auto;
+    padding-top: 0.4rem;
+    flex-wrap: wrap;
+  }
+
+  .fiche-source-link {
+    font-size: 0.78rem;
+    color: #8b6914;
+    text-decoration: none;
+  }
+
+  .fiche-source-link:hover { text-decoration: underline; }
+
+  .fiche-payant {
+    font-size: 0.72rem;
+    font-family: sans-serif;
+    color: #8b3a1a;
+    background: #f5e8e8;
+    border: 0.5px solid #d4b0b0;
+    border-radius: 3px;
+    padding: 0.1rem 0.4rem;
+  }
+
+  .fiche-date {
+    font-size: 0.72rem;
+    color: #aaa;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+</style>

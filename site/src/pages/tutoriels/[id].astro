@@ -1,0 +1,191 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getTutoriels, getTutorielById } from '../../lib/nocodb.js';
+
+export async function getStaticPaths() {
+  try {
+    const tutoriels = await getTutoriels();
+    return tutoriels.map(t => ({ params: { id: String(t.Id) } }));
+  } catch { return []; }
+}
+
+const { id } = Astro.params;
+const t = await getTutorielById(id).catch(() => null);
+if (!t) return Astro.redirect('/tutoriels');
+
+const DOMAINE_LABELS = {
+  couture:'Couture', cotte_mailles:'Cotte de mailles', forge:'Forge', teinture:'Teinture',
+  broderie:'Broderie', maroquinerie:'Maroquinerie', menuiserie:'Menuiserie', autre:'Autre',
+};
+
+const DIFF_LABELS = {
+  debutant:'Débutant', intermediaire:'Intermédiaire', avance:'Avancé', expert:'Expert',
+};
+
+const DIFF_CLS = {
+  debutant:'diff-deb', intermediaire:'diff-inter', avance:'diff-av', expert:'diff-exp',
+};
+
+const MEDIA_LABELS = {
+  video:'Vidéo', article:'Article', pdf:'PDF', image_serie:'Série d\'images',
+};
+
+const MAT_LABELS = {
+  laine:'Laine', lin:'Lin', soie:'Soie', cuir:'Cuir', metal:'Métal', bois:'Bois', autre:'Autre',
+};
+
+function parseMulti(val) {
+  if (!val) return [];
+  return String(val).split(',').map(v => v.trim()).filter(Boolean);
+}
+
+function fmt(d) {
+  if (!d) return null;
+  return new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+const materiaux = parseMulti(t.materiaux).map(v => MAT_LABELS[v] ?? v);
+
+// Détecter si c'est une vidéo YouTube pour embed
+function getYoutubeId(url) {
+  if (!url) return null;
+  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?/]+)/);
+  return m ? m[1] : null;
+}
+
+const youtubeId = t.type_media === 'video' ? getYoutubeId(t.url) : null;
+---
+
+<Layout title={t.titre} description={`Tutoriel de reconstitution médiévale : ${t.titre}`}>
+
+  <nav class="breadcrumb" aria-label="Fil d'Ariane">
+    <ol>
+      <li><a href="/">Accueil</a></li><li aria-hidden="true">›</li>
+      <li><a href="/tutoriels">Tutoriels</a></li><li aria-hidden="true">›</li>
+      <li aria-current="page">{t.titre}</li>
+    </ol>
+  </nav>
+
+  <div class="detail-page">
+    <main class="detail-main">
+
+      <header class="detail-header">
+        <div class="detail-badges">
+          {t.type_media && <span class="badge-media">{MEDIA_LABELS[t.type_media] ?? t.type_media}</span>}
+          {t.difficulte && (
+            <span class={`badge-diff ${DIFF_CLS[t.difficulte] ?? ''}`}>{DIFF_LABELS[t.difficulte] ?? t.difficulte}</span>
+          )}
+          {t.sources_citees && <span class="badge-sources">📜 Sources citées</span>}
+        </div>
+
+        <h1 class="detail-titre">{t.titre}</h1>
+
+        {t.domaine && (
+          <p class="detail-domaine">
+            {DOMAINE_LABELS[t.domaine] ?? t.domaine}
+          </p>
+        )}
+      </header>
+
+      <!-- Embed YouTube si détecté -->
+      {youtubeId && (
+        <section class="detail-section">
+          <div class="video-wrap">
+            <iframe
+              src={`https://www.youtube-nocookie.com/embed/${youtubeId}`}
+              title={t.titre}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowfullscreen
+              loading="lazy"
+            ></iframe>
+          </div>
+        </section>
+      )}
+
+      <!-- Accès -->
+      <section class="detail-section">
+        <h2 class="section-title">Accéder au tutoriel</h2>
+        <a href={t.url} target="_blank" rel="noopener noreferrer" class="source-btn source-btn-primary">
+          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M4.25 5.5a.75.75 0 00-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 00.75-.75v-4a.75.75 0 011.5 0v4A2.25 2.25 0 0112.75 17h-8.5A2.25 2.25 0 012 14.75v-8.5A2.25 2.25 0 014.25 4h5a.75.75 0 010 1.5h-5z" clip-rule="evenodd"/><path fill-rule="evenodd" d="M6.194 12.753a.75.75 0 001.06.053L16.5 4.44v2.81a.75.75 0 001.5 0v-4.5a.75.75 0 00-.75-.75h-4.5a.75.75 0 000 1.5h2.553l-9.056 8.194a.75.75 0 00-.053 1.06z" clip-rule="evenodd"/></svg>
+          Voir le tutoriel ↗
+        </a>
+      </section>
+
+    </main>
+
+    <!-- Sidebar -->
+    <aside class="detail-sidebar">
+      <div class="widget">
+        <div class="widget-title">Informations</div>
+        <dl class="meta-dl">
+          {t.type_media && (<><dt>Format</dt><dd>{MEDIA_LABELS[t.type_media] ?? t.type_media}</dd></>)}
+          {t.domaine && (<><dt>Domaine</dt><dd>{DOMAINE_LABELS[t.domaine] ?? t.domaine}</dd></>)}
+          {t.difficulte && (<><dt>Difficulté</dt><dd><span class={`badge-diff ${DIFF_CLS[t.difficulte]}`}>{DIFF_LABELS[t.difficulte]}</span></dd></>)}
+          {materiaux.length > 0 && (<><dt>Matériaux</dt><dd class="dd-tags">{materiaux.map(m => <span class="m-tag">{m}</span>)}</dd></>)}
+          {t.sources_citees != null && (<><dt>Sourcé</dt><dd>{t.sources_citees ? 'Oui 📜' : 'Non'}</dd></>)}
+          {t.date_soumission && (<><dt>Soumis le</dt><dd><time datetime={t.date_soumission}>{fmt(t.date_soumission)}</time></dd></>)}
+        </dl>
+      </div>
+
+      <div class="widget widget-actions">
+        <a href={t.url} target="_blank" rel="noopener noreferrer" class="action-btn">
+          Voir le tutoriel ↗
+        </a>
+      </div>
+
+      <a href="/tutoriels" class="back-link">← Retour aux tutoriels</a>
+    </aside>
+  </div>
+</Layout>
+
+<style>
+  .breadcrumb { background: #faf8f4; border-bottom: 0.5px solid #d4c9b0; padding: .6rem 1.5rem; }
+  .breadcrumb ol { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; gap: .5rem; list-style: none; padding: 0; flex-wrap: wrap; }
+  .breadcrumb a { font-size: .78rem; color: #8b6914; text-decoration: none; }
+  .breadcrumb [aria-hidden] { color: #ccc; }
+  .breadcrumb [aria-current] { font-size: .78rem; color: #5a5a5a; }
+
+  .detail-page { max-width: 1200px; margin: 0 auto; padding: 2.5rem 1.5rem; display: grid; grid-template-columns: 1fr 280px; gap: 3rem; align-items: start; }
+
+  .detail-header { margin-bottom: 2rem; padding-bottom: 2rem; border-bottom: 0.5px solid #eee8d8; }
+  .detail-badges { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+  .badge-media { font-size: .72rem; background: #f5f0e8; color: #5a4a1a; border: 0.5px solid #d4c9b0; border-radius: 3px; padding: .2rem .6rem; }
+  .badge-sources { font-size: .72rem; background: #f5f0e8; color: #5a4a1a; border: 0.5px solid #d4c9b0; border-radius: 3px; padding: .2rem .6rem; }
+  .badge-diff { font-size: .72rem; border-radius: 3px; padding: .2rem .6rem; border: 0.5px solid transparent; }
+  .diff-deb  { background: #e8f5e8; color: #1a4a2a; border-color: #b0d4b0; }
+  .diff-inter{ background: #e8eef5; color: #1a2a5a; border-color: #b0bdd4; }
+  .diff-av   { background: #f5f0e0; color: #5a4a10; border-color: #d4c9a0; }
+  .diff-exp  { background: #f5e8e8; color: #5a1a1a; border-color: #d4b0b0; }
+  .detail-titre { margin: 0 0 .5rem; font-size: clamp(1.5rem, 3vw, 2rem); font-family: 'Georgia', serif; color: #1a1a1a; }
+  .detail-domaine { margin: 0; font-size: .9rem; color: #6a6a6a; font-style: italic; }
+
+  .detail-section { margin-bottom: 2rem; padding-bottom: 2rem; border-bottom: 0.5px solid #eee8d8; }
+  .detail-section:last-child { border-bottom: none; }
+  .section-title { margin: 0 0 .85rem; font-size: .72rem; font-family: sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #7a7a7a; }
+
+  /* YouTube embed */
+  .video-wrap { position: relative; padding-bottom: 56.25%; height: 0; border: 0.5px solid #d4c9b0; border-radius: 6px; overflow: hidden; }
+  .video-wrap iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+
+  .source-btn { display: inline-flex; align-items: center; gap: .5rem; padding: .65rem 1.25rem; font-size: .875rem; font-family: inherit; text-decoration: none; border-radius: 4px; border: 0.5px solid transparent; transition: background .15s; }
+  .source-btn svg { width: 16px; height: 16px; }
+  .source-btn-primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  .source-btn-primary:hover { background: #8b6914; border-color: #8b6914; }
+
+  .detail-sidebar { position: sticky; top: 72px; display: flex; flex-direction: column; gap: 1.25rem; }
+  .widget { border: 0.5px solid #d4c9b0; border-radius: 6px; padding: 1.1rem 1.25rem; background: #fff; }
+  .widget-title { font-size: .68rem; font-family: sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #9a9a9a; margin-bottom: .85rem; padding-bottom: .6rem; border-bottom: 0.5px solid #eee8d8; }
+  .meta-dl { display: grid; grid-template-columns: auto 1fr; column-gap: .75rem; row-gap: .5rem; margin: 0; font-size: .82rem; }
+  .meta-dl dt { color: #7a7a7a; white-space: nowrap; }
+  .meta-dl dd { margin: 0; color: #1a1a1a; display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
+  .dd-tags { display: flex; flex-wrap: wrap; gap: .3rem; }
+  .m-tag { font-size: .7rem; background: #f5f0e8; color: #5a4a1a; border: 0.5px solid #d4c9b0; border-radius: 3px; padding: .1rem .35rem; }
+  .widget-actions { background: #faf8f4; }
+  .action-btn { display: flex; align-items: center; justify-content: center; padding: .6rem 1rem; font-size: .82rem; font-family: inherit; text-decoration: none; border-radius: 4px; background: #1a1a1a; color: #fff; border: 0.5px solid #1a1a1a; transition: background .15s; }
+  .action-btn:hover { background: #8b6914; border-color: #8b6914; }
+  .back-link { font-size: .8rem; color: #8b6914; text-decoration: none; }
+  .back-link:hover { text-decoration: underline; }
+
+  @media (max-width: 900px) { .detail-page { grid-template-columns: 1fr; } .detail-sidebar { position: static; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); } .back-link { grid-column: 1 / -1; } }
+  @media (max-width: 600px) { .detail-page { padding: 1.25rem 1rem; } .meta-dl { grid-template-columns: 1fr; } }
+</style>
