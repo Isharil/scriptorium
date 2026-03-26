@@ -1,0 +1,357 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getLatestTopics, getTopicsByCategory } from '../lib/discourse.js';
+
+const DISCOURSE_URL = (import.meta.env.DISCOURSE_URL ?? '').replace(/\/$/, '');
+
+// Récupération des dernières discussions (gracieux si Discourse indisponible)
+let topics: any[] = [];
+let error = false;
+try {
+  topics = await getLatestTopics();
+  // Filtrer les topics système (id <= 0 ou sans titre)
+  topics = topics.filter((t: any) => t.id > 0 && !t.pinned_globally && t.title);
+} catch (err: any) {
+  console.error('[Forum]', err.message);
+  error = true;
+}
+
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+  if (mins < 60)  return `il y a ${mins} min`;
+  if (hours < 24) return `il y a ${hours} h`;
+  if (days < 30)  return `il y a ${days} j`;
+  return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+
+function categoryColor(colorHex: string) {
+  return colorHex ? `#${colorHex}` : '#8b6914';
+}
+---
+
+<Layout title="Forum" description="Discussions de la communauté Scriptorium">
+  <div class="forum-page">
+
+    <!-- En-tête -->
+    <div class="forum-header">
+      <div>
+        <h1 class="forum-title">Forum</h1>
+        <p class="forum-subtitle">Discussions de la communauté médiévale</p>
+      </div>
+      <a
+        href={DISCOURSE_URL}
+        target="_blank" rel="noopener noreferrer"
+        class="forum-open-btn"
+      >
+        Ouvrir le forum complet
+        <svg viewBox="0 0 16 16" fill="currentColor" width="13" height="13" aria-hidden="true">
+          <path d="M8.5 1.5A1.5 1.5 0 0110 0h4a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V2a2 2 0 012-2h3.5v1.5H4a.5.5 0 00-.5.5v12a.5.5 0 00.5.5h10a.5.5 0 00.5-.5V2a.5.5 0 00-.5-.5h-4A.5.5 0 019 1V.5a.5.5 0 01.5-.5v1.5z"/>
+          <path d="M10.854 7.146a.5.5 0 010 .708l-3 3a.5.5 0 01-.708-.708L9.293 8 7.146 5.854a.5.5 0 11.708-.708l3 3z"/>
+        </svg>
+      </a>
+    </div>
+
+    <!-- Bouton "Nouvelle discussion" -->
+    <div class="forum-actions">
+      <a
+        href={`${DISCOURSE_URL}/new-topic`}
+        target="_blank" rel="noopener noreferrer"
+        class="new-topic-btn"
+      >
+        + Nouvelle discussion
+      </a>
+    </div>
+
+    <!-- Contenu -->
+    {error ? (
+      <div class="forum-error">
+        <p>Impossible de charger les discussions pour l'instant.</p>
+        <a href={DISCOURSE_URL} target="_blank" rel="noopener noreferrer" class="forum-open-btn">
+          Accéder au forum Discourse →
+        </a>
+      </div>
+    ) : topics.length === 0 ? (
+      <p class="forum-empty">Aucune discussion pour l'instant. Soyez le premier !</p>
+    ) : (
+      <div class="topics-list">
+        <!-- En-tête colonnes -->
+        <div class="topics-header">
+          <span>Sujet</span>
+          <span class="col-replies">Rép.</span>
+          <span class="col-views">Vues</span>
+          <span class="col-date">Activité</span>
+        </div>
+
+        {topics.map((t: any) => (
+          <a
+            class="topic-row"
+            href={`${DISCOURSE_URL}/t/${t.slug}/${t.id}`}
+            target="_blank" rel="noopener noreferrer"
+          >
+            <!-- Titre + catégorie -->
+            <div class="topic-main">
+              {t.category_id && (
+                <span
+                  class="topic-category"
+                  style={`background: ${categoryColor(t.category?.color ?? '')}`}
+                />
+              )}
+              <div class="topic-info">
+                <span class="topic-title">{t.title}</span>
+                <div class="topic-tags">
+                  {t.pinned && <span class="topic-tag">📌 épinglé</span>}
+                  {t.tags?.slice(0, 3).map((tag: string) => (
+                    <span class="topic-tag">{tag}</span>
+                  ))}
+                </div>
+              </div>
+              <!-- Avatars des participants -->
+              <div class="topic-participants">
+                {t.posters?.slice(0, 3).map((p: any) => (
+                  p.extras?.includes('original') ? (
+                    <div class="topic-avatar-initial" title={p.user?.username ?? ''}>
+                      {(p.user?.username ?? '?')[0].toUpperCase()}
+                    </div>
+                  ) : null
+                ))}
+              </div>
+            </div>
+
+            <span class="col-replies">{Math.max(0, (t.posts_count ?? 1) - 1)}</span>
+            <span class="col-views">{t.views ?? 0}</span>
+            <span class="col-date">{timeAgo(t.last_posted_at ?? t.created_at)}</span>
+          </a>
+        ))}
+      </div>
+    )}
+
+    <!-- Pied de page -->
+    <div class="forum-footer">
+      <a href={DISCOURSE_URL} target="_blank" rel="noopener noreferrer" class="forum-link">
+        Voir toutes les discussions sur Discourse →
+      </a>
+    </div>
+
+  </div>
+</Layout>
+
+<style>
+  .forum-page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  /* ── En-tête ──────────────────────────────────────────────────────────── */
+  .forum-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .forum-title {
+    font-size: 1.75rem;
+    margin: 0 0 0.25rem;
+    color: #1a1a1a;
+  }
+
+  .forum-subtitle {
+    margin: 0;
+    color: #6a6a6a;
+    font-size: 0.9rem;
+  }
+
+  .forum-open-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 1rem;
+    background: #1a1a1a;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+
+  .forum-open-btn:hover { background: #8b6914; }
+
+  /* ── Actions ──────────────────────────────────────────────────────────── */
+  .forum-actions {
+    margin-bottom: 1.5rem;
+  }
+
+  .new-topic-btn {
+    display: inline-block;
+    padding: 0.45rem 1rem;
+    border: 0.5px solid #d4c9b0;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: #1a1a1a;
+    text-decoration: none;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .new-topic-btn:hover {
+    border-color: #8b6914;
+    background: #faf8f4;
+  }
+
+  /* ── Liste des topics ─────────────────────────────────────────────────── */
+  .topics-list {
+    border: 0.5px solid #d4c9b0;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .topics-header,
+  .topic-row {
+    display: grid;
+    grid-template-columns: 1fr 50px 60px 90px;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+  }
+
+  .topics-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #9a9a9a;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: #faf8f4;
+    border-bottom: 0.5px solid #d4c9b0;
+  }
+
+  .topic-row {
+    text-decoration: none;
+    color: inherit;
+    border-bottom: 0.5px solid #f0ece0;
+    transition: background 0.1s;
+  }
+
+  .topic-row:last-child { border-bottom: none; }
+
+  .topic-row:hover { background: #faf8f4; }
+
+  /* ── Colonne principale ───────────────────────────────────────────────── */
+  .topic-main {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+  }
+
+  .topic-category {
+    flex-shrink: 0;
+    width: 4px;
+    height: 32px;
+    border-radius: 2px;
+    background: #8b6914;
+  }
+
+  .topic-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .topic-title {
+    display: block;
+    font-size: 0.9rem;
+    color: #1a1a1a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+  }
+
+  .topic-tags {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+  }
+
+  .topic-tag {
+    font-size: 0.7rem;
+    color: #8b6914;
+    background: #f5f0e8;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+  }
+
+  .topic-participants {
+    display: flex;
+    gap: -4px;
+    flex-shrink: 0;
+  }
+
+  .topic-avatar-initial {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #d4c9b0;
+    color: #5a5a5a;
+    font-size: 0.65rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid #fff;
+  }
+
+  /* ── Colonnes méta ────────────────────────────────────────────────────── */
+  .col-replies,
+  .col-views,
+  .col-date {
+    text-align: center;
+    font-size: 0.8rem;
+    color: #6a6a6a;
+  }
+
+  .col-date { text-align: right; white-space: nowrap; font-size: 0.75rem; }
+
+  /* ── États ────────────────────────────────────────────────────────────── */
+  .forum-error,
+  .forum-empty {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    color: #6a6a6a;
+    border: 0.5px solid #d4c9b0;
+    border-radius: 6px;
+  }
+
+  .forum-error p { margin: 0 0 1rem; }
+
+  /* ── Pied ─────────────────────────────────────────────────────────────── */
+  .forum-footer {
+    margin-top: 1.5rem;
+    text-align: center;
+  }
+
+  .forum-link {
+    font-size: 0.85rem;
+    color: #8b6914;
+    text-decoration: none;
+  }
+
+  .forum-link:hover { text-decoration: underline; }
+
+  /* ── Responsive ───────────────────────────────────────────────────────── */
+  @media (max-width: 600px) {
+    .topics-header,
+    .topic-row {
+      grid-template-columns: 1fr 40px 70px;
+    }
+
+    .col-views { display: none; }
+
+    .topics-header span:nth-child(3) { display: none; }
+  }
+</style>
