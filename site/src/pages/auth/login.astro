@@ -1,0 +1,34 @@
+---
+// Initie le flux SSO DiscourseConnect.
+// Redirige l'utilisateur vers Discourse pour authentification.
+import { createHmac, randomBytes } from 'node:crypto';
+
+const SSO_SECRET    = import.meta.env.DISCOURSE_SSO_SECRET;
+const DISCOURSE_URL = (import.meta.env.DISCOURSE_URL ?? '').replace(/\/$/, '');
+
+if (!SSO_SECRET || !DISCOURSE_URL) {
+  return Astro.redirect('/?error=sso_not_configured');
+}
+
+// Nonce aléatoire (protège contre les attaques replay)
+const nonce = randomBytes(16).toString('hex');
+
+// Payload : nonce + URL de retour
+const returnUrl  = `${Astro.url.origin}/auth/callback`;
+const rawPayload = `nonce=${nonce}&return_sso_url=${encodeURIComponent(returnUrl)}`;
+const payload    = Buffer.from(rawPayload).toString('base64');
+const sig        = createHmac('sha256', SSO_SECRET).update(payload).digest('hex');
+
+// Stocker le nonce (valide 10 min)
+Astro.cookies.set('discourse_nonce', nonce, {
+  httpOnly: true,
+  sameSite: 'lax',
+  maxAge:   600,
+  path:     '/',
+});
+
+return Astro.redirect(
+  `${DISCOURSE_URL}/session/sso_provider?sso=${encodeURIComponent(payload)}&sig=${sig}`,
+  302,
+);
+---

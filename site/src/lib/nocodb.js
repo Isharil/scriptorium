@@ -10,6 +10,7 @@ const TABLE_IDS = {
   evenements:      'm72t0konedv041r',
   troupes:         'm6sj8o4ptlzf1py',
   avis_troupes:    'mnkwrt9av9n1hqy',
+  membres:         'mtggdpahx1iyvlq',
 };
 
 // ── Client interne ────────────────────────────────────────────────────────────
@@ -194,6 +195,47 @@ export async function getEvenementsAvecCoords() {
     sort:  'date_debut',
     limit: '500',
   });
+}
+
+// ── Membres ───────────────────────────────────────────────────────────────────
+
+/** Cherche un membre par son pseudo Discourse */
+export async function getMemberByDiscourseUsername(username) {
+  const list = await fetchRows(TABLE_IDS.membres, {
+    where: `(discourse_username,eq,${username})`,
+    limit: '1',
+  });
+  return list[0] ?? null;
+}
+
+/** Crée un nouveau membre */
+export async function createMember(data) {
+  const url = `${BASE_URL}/api/v1/db/data/noco/${BASE_ID}/${TABLE_IDS.membres}`;
+  const res = await fetch(url, {
+    method:  'POST',
+    headers: { 'xc-token': API_TOKEN, 'Content-Type': 'application/json' },
+    body:    JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`NocoDB membre create ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+/** Met à jour la date de dernière activité d'un membre */
+export async function updateMemberActivity(id, date) {
+  const url = `${BASE_URL}/api/v1/db/data/noco/${BASE_ID}/${TABLE_IDS.membres}/${id}`;
+  const res = await fetch(url, {
+    method:  'PATCH',
+    headers: { 'xc-token': API_TOKEN, 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ derniere_activite: date }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`NocoDB membre update ${res.status}: ${text}`);
+  }
+  return res.json();
 }
 
 /** Soumet une URL dans la file d'attente IA */

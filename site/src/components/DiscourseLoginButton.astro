@@ -1,0 +1,228 @@
+---
+// Bouton connexion/profil Discourse.
+// Affiche "Rejoindre" si non connecté, sinon avatar + pseudo + menu déroulant.
+import { getSession } from '../lib/session.js';
+
+const session = getSession(Astro.cookies);
+const DISCOURSE_URL = (import.meta.env.DISCOURSE_URL ?? '').replace(/\/$/, '');
+---
+
+{session ? (
+  <div class="user-menu">
+    <button class="user-btn" aria-haspopup="true" aria-expanded="false" aria-label="Menu utilisateur">
+      {session.avatarUrl ? (
+        <img
+          class="user-avatar"
+          src={session.avatarUrl}
+          alt={session.username}
+          width="28" height="28"
+        />
+      ) : (
+        <span class="user-avatar user-avatar-initiale">
+          {session.username?.[0]?.toUpperCase()}
+        </span>
+      )}
+      <span class="user-name">{session.username}</span>
+      <svg class="user-chevron" viewBox="0 0 12 8" fill="none" stroke="currentColor"
+           stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+        <path d="M1 1l5 5 5-5"/>
+      </svg>
+    </button>
+
+    <div class="user-dropdown" hidden>
+      <div class="user-dropdown-header">
+        <span class="user-dropdown-name">{session.name || session.username}</span>
+        <span class="user-dropdown-titre">{session.titreLabel}</span>
+      </div>
+      <a
+        href={`${DISCOURSE_URL}/u/${session.username}`}
+        target="_blank" rel="noopener noreferrer"
+        class="user-dropdown-link"
+      >
+        Mon profil Discourse
+      </a>
+      <a href="/soumettre" class="user-dropdown-link">
+        Soumettre une ressource
+      </a>
+      <a href="/auth/logout" class="user-dropdown-link user-dropdown-logout">
+        Déconnexion
+      </a>
+    </div>
+  </div>
+) : (
+  <a href="/auth/login" class="btn-rejoindre">Rejoindre</a>
+)}
+
+<style>
+  /* ── Bouton "Rejoindre" (non connecté) ─────────────────────────────────── */
+  .btn-rejoindre {
+    flex-shrink: 0;
+    padding: 0.4rem 1rem;
+    font-size: 0.8rem;
+    font-family: inherit;
+    text-decoration: none;
+    color: #fff;
+    background: #1a1a1a;
+    border: 0.5px solid #1a1a1a;
+    border-radius: 4px;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn-rejoindre:hover {
+    background: #8b6914;
+    border-color: #8b6914;
+  }
+
+  /* ── Menu utilisateur (connecté) ───────────────────────────────────────── */
+  .user-menu {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .user-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.6rem 0.3rem 0.3rem;
+    background: none;
+    border: 0.5px solid #d4c9b0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.8rem;
+    color: #1a1a1a;
+    transition: border-color 0.15s;
+  }
+
+  .user-btn:hover,
+  .user-btn[aria-expanded="true"] {
+    border-color: #8b6914;
+  }
+
+  .user-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .user-avatar-initiale {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #8b6914;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .user-name {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .user-chevron {
+    width: 10px;
+    height: 7px;
+    color: #9a9a9a;
+    flex-shrink: 0;
+    transition: transform 0.15s;
+  }
+
+  .user-btn[aria-expanded="true"] .user-chevron {
+    transform: rotate(180deg);
+  }
+
+  /* ── Dropdown ───────────────────────────────────────────────────────────── */
+  .user-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 200px;
+    background: #fff;
+    border: 0.5px solid #d4c9b0;
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.09);
+    z-index: 200;
+    overflow: hidden;
+  }
+
+  .user-dropdown-header {
+    padding: 0.75rem 1rem;
+    border-bottom: 0.5px solid #e8e0cc;
+    background: #faf8f4;
+  }
+
+  .user-dropdown-name {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #1a1a1a;
+  }
+
+  .user-dropdown-titre {
+    display: block;
+    font-size: 0.75rem;
+    color: #8b6914;
+    margin-top: 2px;
+  }
+
+  .user-dropdown-link {
+    display: block;
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+    color: #2a2a2a;
+    text-decoration: none;
+    border-bottom: 0.5px solid #f5f0e8;
+    transition: background 0.1s;
+  }
+
+  .user-dropdown-link:last-child {
+    border-bottom: none;
+  }
+
+  .user-dropdown-link:hover {
+    background: #faf8f4;
+  }
+
+  .user-dropdown-logout {
+    color: #c0392b;
+  }
+
+  .user-dropdown-logout:hover {
+    background: #fff5f5;
+  }
+</style>
+
+<script>
+  const menu     = document.querySelector('.user-menu') as HTMLElement | null;
+  const btn      = menu?.querySelector('.user-btn') as HTMLButtonElement | null;
+  const dropdown = menu?.querySelector('.user-dropdown') as HTMLElement | null;
+
+  btn?.addEventListener('click', () => {
+    const expanded = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', String(!expanded));
+    if (dropdown) dropdown.hidden = expanded;
+  });
+
+  // Fermer en cliquant en dehors
+  document.addEventListener('click', (e) => {
+    if (menu && !menu.contains(e.target as Node)) {
+      btn?.setAttribute('aria-expanded', 'false');
+      if (dropdown) dropdown.hidden = true;
+    }
+  });
+
+  // Fermer avec Échap
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && btn?.getAttribute('aria-expanded') === 'true') {
+      btn.setAttribute('aria-expanded', 'false');
+      if (dropdown) dropdown.hidden = true;
+      btn.focus();
+    }
+  });
+</script>

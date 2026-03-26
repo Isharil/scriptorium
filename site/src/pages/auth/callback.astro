@@ -1,0 +1,92 @@
+---
+// Reçoit le retour Discourse après authentification SSO.
+// Vérifie la signature HMAC, extrait les infos utilisateur,
+// crée/met à jour le membre dans NocoDB, pose le cookie de session.
+import { createHmac } from 'node:crypto';
+import {
+  getMemberByDiscourseUsername,
+  createMember,
+  updateMemberActivity,
+} from '../../lib/nocodb.js';
+
+const SSO_SECRET = import.meta.env.DISCOURSE_SSO_SECRET;
+
+const ssoParam = Astro.url.searchParams.get('sso');
+const sigParam  = Astro.url.searchParams.get('sig');
+
+if (!ssoParam || !sigParam || !SSO_SECRET) {
+  return Astro.redirect('/?error=sso_missing');
+}
+
+// ── 1. Vérifier la signature HMAC-SHA256 ──────────────────────────────────────
+const expectedSig = createHmac('sha256', SSO_SECRET).update(ssoParam).digest('hex');
+if (expectedSig !== sigParam) {
+  return Astro.redirect('/?error=sso_invalid_signature');
+}
+
+// ── 2. Vérifier le nonce anti-replay ─────────────────────────────────────────
+const decoded     = Buffer.from(ssoParam, 'base64').toString('utf-8');
+const params      = new URLSearchParams(decoded);
+const nonce       = params.get('nonce');
+const storedNonce = Astro.cookies.get('discourse_nonce')?.value;
+
+if (!nonce || nonce !== storedNonce) {
+  return Astro.redirect('/?error=sso_invalid_nonce');
+}
+
+// ── 3. Extraire les infos utilisateur ────────────────────────────────────────
+const username  = params.get('username')   ?? '';
+const email     = params.get('email')      ?? '';
+const name      = params.get('name')       ?? username;
+const avatarUrl = params.get('avatar_url') ?? '';
+const groups    = params.get('groups')     ?? '';
+
+if (!username) {
+  return Astro.redirect('/?error=sso_no_username');
+}
+
+// ── 4. Titre communautaire selon les groupes Discourse ───────────────────────
+const groupList = groups.split(',').map(g => g.trim()).filter(Boolean);
+let titre = 'enlumineur';
+if      (groupList.includes('medieviste_verifie')) titre = 'medieviste_verifie';
+else if (groupList.includes('maitre_guilde'))      titre = 'maitre_guilde';
+else if (groupList.includes('maitre_atelier'))     titre = 'maitre_atelier';
+else if (groupList.includes('clerc'))              titre = 'clerc';
+
+// ── 5. Créer ou mettre à jour le membre NocoDB ───────────────────────────────
+const today = new Date().toISOString().split('T')[0];
+try {
+  const membre = await getMemberByDiscourseUsername(username);
+  if (!membre) {
+    await createMember({
+      pseudo:             username,
+      discourse_username: username,
+      titre_communaute:   titre,
+      points_reputation:  0,
+      date_inscription:   today,
+      derniere_activite:  today,
+    });
+  } else {
+    await updateMemberActivity(membre.Id, today);
+  }
+} catch (err) {
+  // Non-fatal : on continue même si NocoDB est indisponible
+  console.error('[SSO callback] NocoDB error:', err.message);
+}
+
+// ── 6. Créer le cookie de session signé ──────────────────────────────────────
+const sessionData = JSON.stringify({ username, email, name, avatarUrl, titre, groups });
+const sessionB64  = Buffer.from(sessionData).toString('base64');
+const sessionSig  = createHmac('sha256', SSO_SECRET).update(sessionB64).digest('hex');
+
+Astro.cookies.set('scriptorium_session', `${sessionB64}.${sessionSig}`, {
+  httpOnly: true,
+  sameSite: 'lax',
+  maxAge:   60 * 60 * 24 * 30,  // 30 jours
+  path:     '/',
+});
+
+Astro.cookies.delete('discourse_nonce', { path: '/' });
+
+return Astro.redirect('/');
+---

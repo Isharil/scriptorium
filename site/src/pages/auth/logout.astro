@@ -1,0 +1,8 @@
+---
+// Déconnexion : supprime le cookie de session local.
+// Ne déconnecte pas de Discourse (les sessions Discourse restent actives).
+Astro.cookies.delete('scriptorium_session', { path: '/' });
+
+const referer = Astro.request.headers.get('referer');
+return Astro.redirect(referer ?? '/');
+---

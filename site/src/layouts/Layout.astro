@@ -1,4 +1,7 @@
 ---
+import DiscourseLoginButton from '../components/DiscourseLoginButton.astro';
+import { getSession } from '../lib/session.js';
+
 interface Props {
   title?: string;
   description?: string;
@@ -6,6 +9,7 @@ interface Props {
 
 const { title = 'Scriptorium', description = 'Plateforme communautaire de ressources médiévales' } = Astro.props;
 const currentPath = Astro.url.pathname;
+const session = getSession(Astro.cookies);
 
 const navLinks = [
   { href: '/ressources',  label: 'Ressources'  },
@@ -75,8 +79,8 @@ const navLinks = [
           />
         </form>
 
-        <!-- CTA -->
-        <a href="/rejoindre" class="btn-rejoindre">Rejoindre</a>
+        <!-- CTA / Connexion -->
+        <DiscourseLoginButton />
 
         <!-- Menu mobile (burger) -->
         <button class="burger" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="mobile-menu">
@@ -96,7 +100,10 @@ const navLinks = [
                 </a>
               </li>
             ))}
-            <li><a href="/rejoindre" class="nav-link">Rejoindre</a></li>
+            {session
+              ? <li><a href="/auth/logout" class="nav-link">Déconnexion</a></li>
+              : <li><a href="/auth/login"  class="nav-link">Rejoindre</a></li>
+            }
           </ul>
         </nav>
         <form class="search-form mobile-search" action="/recherche" role="search">
@@ -278,26 +285,6 @@ const navLinks = [
   .search-form input:focus {
     border-color: #8b6914;
     background: #fff;
-  }
-
-  /* ── Bouton Rejoindre ────────────────────────────────────────────────────── */
-  .btn-rejoindre {
-    flex-shrink: 0;
-    padding: 0.4rem 1rem;
-    font-size: 0.8rem;
-    font-family: inherit;
-    text-decoration: none;
-    color: #fff;
-    background: #1a1a1a;
-    border: 0.5px solid #1a1a1a;
-    border-radius: 4px;
-    transition: background 0.15s, color 0.15s;
-    white-space: nowrap;
-  }
-
-  .btn-rejoindre:hover {
-    background: #8b6914;
-    border-color: #8b6914;
   }
 
   /* ── Burger ──────────────────────────────────────────────────────────────── */
