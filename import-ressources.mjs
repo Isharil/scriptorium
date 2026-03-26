@@ -28,6 +28,7 @@ async function getTableIds() {
     ressources: find('ressources'),
     tutoriels:  find('tutoriels'),
     boutiques:  find('boutiques'),
+    troupes:    find('troupes'),
   };
 }
 
@@ -191,6 +192,11 @@ function mapStatut(raw) {
     ? 'approuve' : 'soumis';
 }
 
+function mapStatutTroupe(raw) {
+  return norm(raw).toLowerCase() === 'validé' || norm(raw).toLowerCase() === 'valide'
+    ? 'verifie' : 'soumis';
+}
+
 function mapAcces(raw) {
   return norm(raw).toLowerCase().includes('gratuit');
 }
@@ -214,7 +220,7 @@ function parseExcel(filePath) {
   const rows = XLSX.utils.sheet_to_json(ws, { defval: '', header: 1 });
 
   // Ligne 1 (index 1) = en-têtes ; lignes suivantes = données
-  const ressources = [], tutoriels = [], boutiques = [];
+  const ressources = [], tutoriels = [], boutiques = [], troupes = [];
 
   for (const row of rows.slice(2)) {
     const nom       = norm(row[0]);
@@ -234,8 +240,22 @@ function parseExcel(filePath) {
 
     const typeLC = type.toLowerCase();
 
-    if (typeLC === 'marchand/fournisseur') {
-      // ── BOUTIQUE ──────────────────────────────────────────────────────────
+    const themaLC = thema.toLowerCase();
+
+    // ── TROUPE — prestataire (marchand/fournisseur avec thema "Prestataire ·") ──
+    if (typeLC === 'marchand/fournisseur' && themaLC.startsWith('prestataire')) {
+      troupes.push({
+        nom:             nom,
+        type:            'prestataire',
+        url_site:        url,
+        description:     commentaire || null,
+        regions:         mapMulti(aireGeo, REGIONS_MAP),
+        statut:          mapStatutTroupe(statut),
+        date_soumission: date,
+      });
+
+    // ── BOUTIQUE ──────────────────────────────────────────────────────────────
+    } else if (typeLC === 'marchand/fournisseur') {
       boutiques.push({
         nom:              nom,
         url_site:         url,
@@ -246,9 +266,23 @@ function parseExcel(filePath) {
         date_soumission:  date,
       });
 
+    // ── TROUPE — troupe documentée ou groupe de musique ───────────────────────
+    } else if ((typeLC === 'reconstitution documentée' || typeLC === 'reconstitution documentee')
+            && (themaLC.startsWith('reconstitution') || themaLC.startsWith('musique médiévale') || themaLC.startsWith('musique medievale'))) {
+      troupes.push({
+        nom:                  nom,
+        type:                 'troupe_documentee',
+        url_site:             url,
+        description:          commentaire || null,
+        periodes_couvertes:   mapMulti(periode, PERIODES_MAP) ?? null,
+        regions:              mapMulti(aireGeo, REGIONS_MAP),
+        statut:               mapStatutTroupe(statut),
+        date_soumission:      date,
+      });
+
+    // ── TUTORIEL ──────────────────────────────────────────────────────────────
     } else if (typeLC === 'reconstitution documentée' || typeLC === 'reconstitution documentee'
             || typeLC === 'site de tutoriels'         || typeLC === 'site tutoriels') {
-      // ── TUTORIEL ──────────────────────────────────────────────────────────
       const isSite = typeLC.includes('site');
       tutoriels.push({
         titre:           nom,
@@ -261,8 +295,25 @@ function parseExcel(filePath) {
         date_soumission: date,
       });
 
+    // ── TROUPE — annuaire de troupes (portail/agrégateur sur la reconstitution) ─
+    } else if ((typeLC === 'portail/agrégateur' || typeLC === 'portail/agregateur')
+            && (
+              (themaLC.includes('reconstitution') && (themaLC.includes('associations') || themaLC.includes('groupes')))
+              || themaLC.includes('troupes festives')
+              || (themaLC.includes('troupes') && themaLC.includes('reconstitution'))
+            )) {
+      troupes.push({
+        nom:             nom,
+        type:            'annuaire',
+        url_site:        url,
+        description:     commentaire || null,
+        regions:         mapMulti(aireGeo, REGIONS_MAP),
+        statut:          mapStatutTroupe(statut),
+        date_soumission: date,
+      });
+
+    // ── RESSOURCE (portail, publication, source primaire, iconographie) ────────
     } else {
-      // ── RESSOURCE (portail, publication, source primaire, iconographie) ───
       ressources.push({
         titre:            nom,
         url_source:       url,
@@ -281,7 +332,7 @@ function parseExcel(filePath) {
     }
   }
 
-  return { ressources, tutoriels, boutiques };
+  return { ressources, tutoriels, boutiques, troupes };
 }
 
 // ── Import ────────────────────────────────────────────────────────────────────
@@ -309,8 +360,8 @@ async function main() {
   console.log('═══════════════════════════════════════════════════════\n');
 
   // Lire le Excel
-  const { ressources, tutoriels, boutiques } = parseExcel('scriptorium_ressources.xlsx');
-  console.log(`Parsé : ${ressources.length} ressources, ${tutoriels.length} tutoriels, ${boutiques.length} boutiques`);
+  const { ressources, tutoriels, boutiques, troupes } = parseExcel('scriptorium_ressources.xlsx');
+  console.log(`Parsé : ${ressources.length} ressources, ${tutoriels.length} tutoriels, ${boutiques.length} boutiques, ${troupes.length} troupes`);
 
   // Récupérer les IDs de tables
   const ids = await getTableIds();
@@ -325,9 +376,10 @@ async function main() {
   const r1 = await importTable(ids.ressources, 'Ressources', ressources);
   const r2 = await importTable(ids.tutoriels,  'Tutoriels',  tutoriels);
   const r3 = await importTable(ids.boutiques,  'Boutiques',  boutiques);
+  const r4 = await importTable(ids.troupes,    'Troupes',    troupes);
 
-  const total = r1.ok + r2.ok + r3.ok;
-  const totalErr = r1.errors + r2.errors + r3.errors;
+  const total = r1.ok + r2.ok + r3.ok + r4.ok;
+  const totalErr = r1.errors + r2.errors + r3.errors + r4.errors;
 
   console.log('\n═══════════════════════════════════════════════════════');
   console.log(`  Import terminé : ${total} succès, ${totalErr} erreurs`);
