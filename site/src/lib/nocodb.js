@@ -8,7 +8,8 @@ const TABLE_IDS = {
   boutiques:       'mznghgj1ksmg1g8',
   tutoriels:       'mdb6d04p0cbqv3f',
   evenements:      'm72t0konedv041r',
-  troupes:         'myq4pxo3t8o9ax6',
+  troupes:         'm6sj8o4ptlzf1py',
+  avis_troupes:    'mnkwrt9av9n1hqy',
 };
 
 // ── Client interne ────────────────────────────────────────────────────────────
