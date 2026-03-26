@@ -138,10 +138,10 @@ export async function getEvenementById(id) {
   return fetchRowById(TABLE_IDS.evenements, id);
 }
 
-/** Toutes les troupes approuvées */
+/** Toutes les troupes vérifiées */
 export async function getTroupes() {
   return fetchAllRows(TABLE_IDS.troupes, {
-    where: '(statut,eq,approuve)',
+    where: '(statut,eq,verifie)',
     sort:  'nom',
   });
 }
@@ -154,7 +154,7 @@ export async function getTroupeById(id) {
 /** Toutes les troupes avec coordonnées (pour la carte) */
 export async function getTroupesAvecCoords() {
   return fetchAllRows(TABLE_IDS.troupes, {
-    where: '(statut,eq,approuve)',
+    where: '(statut,eq,verifie)',
     sort:  'nom',
     limit: '500',
   });
