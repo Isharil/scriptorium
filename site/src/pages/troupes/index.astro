@@ -13,11 +13,9 @@ const qPeriode = params.get('periode') ?? '';
 const qRegion = params.get('region') ?? '';
 
 const TYPES = [
-  { value: 'troupe_reconstitution', label: 'Troupe de reconstitution' },
-  { value: 'musique',               label: 'Groupe de musique'         },
-  { value: 'theatre_spectacle',     label: 'Théâtre / Spectacle'       },
-  { value: 'confrerie',             label: 'Confrérie'                 },
-  { value: 'association',           label: 'Association'               },
+  { value: 'troupe_documentee', label: 'Troupe documentée'  },
+  { value: 'annuaire',          label: 'Annuaire / Portail' },
+  { value: 'prestataire',       label: 'Prestataire'        },
 ];
 
 const PERIODES = [
@@ -46,9 +44,9 @@ function matchMulti(field, value) {
 }
 
 const filtres = troupes.filter(g => {
-  if (qType   && g.type    !== qType)              return false;
-  if (qPeriode && !matchMulti(g.periodes, qPeriode)) return false;
-  if (qRegion  && !matchMulti(g.regions,  qRegion))  return false;
+  if (qType    && !matchMulti(g.type,             qType))    return false;
+  if (qPeriode && !matchMulti(g.periodes_couvertes, qPeriode)) return false;
+  if (qRegion  && !matchMulti(g.regions,          qRegion))  return false;
   if (qQ) {
     const hay = `${g.nom} ${g.description} ${g.ville} ${g.specialites}`.toLowerCase();
     if (!hay.includes(qQ.toLowerCase())) return false;
@@ -154,7 +152,7 @@ function parseMulti(val, map) {
       ) : (
         <ol class="groupes-grid">
           {filtres.map(g => {
-            const periodes = parseMulti(g.periodes, PERIODES).slice(0, 2);
+            const periodes = parseMulti(g.periodes_couvertes, PERIODES).slice(0, 2);
             const regions  = parseMulti(g.regions,  REGIONS).slice(0, 2);
             return (
               <li>
