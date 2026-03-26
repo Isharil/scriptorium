@@ -87,14 +87,22 @@ const REGIONS_MAP = {
 
 // Colonne "Période" → periodes (slugs NocoDB)
 const PERIODES_MAP = {
-  'transversal': 'tout_MA',
-  'haut ma':     'haut_MA',
-  'xe-xie':      'Xe_XIe',
-  'xe–xie':      'Xe_XIe',
-  'xiie-xiiie':  'XIIe_XIIIe',
-  'xiie–xiiie':  'XIIe_XIIIe',
-  'xive':        'XIVe',
-  'xve':         'XVe',
+  'transversal':       'tout_MA',
+  'haut ma':           'haut_MA',
+  'haut moyen âge':    'haut_MA',
+  'haut moyen age':    'haut_MA',
+  'xe-xie':            'Xe_XIe',
+  'xe–xie':            'Xe_XIe',
+  'xiie-xiiie':        'XIIe_XIIIe',
+  'xiie–xiiie':        'XIIe_XIIIe',
+  'ma central':        'XIIe_XIIIe',
+  'moyen âge central': 'XIIe_XIIIe',
+  'moyen age central': 'XIIe_XIIIe',
+  'xive':              'XIVe',
+  'bas moyen âge':     'XIVe',
+  'bas moyen age':     'XIVe',
+  'xve':               'XVe',
+  'renaissance':       null,   // hors périmètre, ignoré
 };
 
 // Colonne "Thématique" → categories (slugs NocoDB) par mots-clés
